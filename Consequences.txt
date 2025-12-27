@@ -1,0 +1,37 @@
+Challenges Faced
+
+While building a local AI agent using Ollama, LangChain, and ChromaDB, I encountered several obstacles. Here’s a breakdown of the key difficulties I faced and how I approached them.
+
+1. Installation
+
+I began by downloading Ollama and testing its functionality via the terminal. Ollama offers a wide range of pre-trained LLM models that can run offline, so selecting the most suitable model for my project was the first step.
+Before committing to a download, I researched which Ollama model best fit my requirements. This involved exploring model specifications, performance benchmarks, and compatibility with RAG workflows. 
+Models used: LLAMA 3.2, mistral, comic-embed-text, mxbai-embed-large
+
+2. Setup
+
+After successfully installing and testing Ollama, the next challenge was setting up LangChain with a Python virtual environment on VS Code.
+
+Environment Preparation:
+ It’s always a good practice to ensure all necessary VS Code extensions are installed before building. The first task was creating a Python virtual environment for the project.
+
+Platform-Specific Commands:
+ I ran into syntax differences between Windows and macOS for environment creation. Since I use macOS, I had to look up the correct commands and adjust accordingly.
+
+Python Version Conflicts:
+ This was one of the trickiest parts. My virtual environment was linked to Python 3.9, but I initially tried running the project on Python 3.13. Because I work on multiple projects requiring different Python versions, this mismatch caused installation and execution errors. Thankfully, VS Code’s interpreter switching made it easier to align the correct Python version with the virtual environment.
+
+3. Execution
+
+Once the setup was complete, I moved to the execution phase — which brought its own set of challenges.
+Even with correct code and properly installed modules, the project’s success depended on the exact Python interpreter associated with the virtual environment.
+ Since virtual environment is set on one Python version, it doesn’t work on the other versions if it has not yet installed again. Additionally, I encountered issues with the PyLance extension in VS Code, which affected code suggestions and type checking. Switching interpreters and verifying environment paths ultimately resolved this. The execution commands differ from Windows to Mac, for example: 
+On Windows, we enter “python filename” to run the program and execute the specific file.  Likewise on Mac, we enter “python3 filename”.
+
+Key Takeaways
+
+* Choose the right model in Ollama before downloading to save time and resources.
+* Always verify Python version compatibility between the system, virtual environment, and installed packages.
+* For multi-project workflows, label or document interpreters and create individual folders to avoid confusion later.
+* Keep essential VS Code extensions like Code runner, PyLance, Python Environment, Python and Prettier updated for smooth development.
+* This project was an eye-opening experience that not only helped me understand the fundamentals of LangChain + RAG + Local LLMs but also taught me the importance of meticulous environment setup, dependency management and importantly having patience during re-occurring errors.

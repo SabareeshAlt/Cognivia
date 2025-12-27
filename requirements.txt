@@ -1,0 +1,9 @@
+langchain
+langchain-ollama
+langchain-milvus
+pandas
+protobuf
+grpcio
+grpcio-tools
+pymilvus
+django
