@@ -14,8 +14,8 @@ from langchain_core.documents import Document
 pdf_paths = [
     os.path.join("Project", "/Users/apple/Applications/Visual Studio Code/Project/RAG sample 1.pdf"),
     os.path.join("Project", "/Users/apple/Applications/Visual Studio Code/Project/RAG sample 2.pdf"),
-    os.path.join("Project", "/Users/apple/Applications/Visual Studio Code/Project/RAG sample 4.pdf"),
-    os.path.join("Project", "/Users/apple/Applications/Visual Studio Code/Project/RAG sample 5.pdf")
+    os.path.join("Project", "/Users/apple/Applications/Visual Studio Code/Project/RAG sample 3.pdf"),
+    os.path.join("Project", "/Users/apple/Applications/Visual Studio Code/Project/RAG sample 4.pdf")
 ]
 #os.path.join("Project", "/Users/apple/Applications/Visual Studio Code/Project/RAG sample 3.pdf"),
 def pdfs_to_chunks(pdf_paths, chunk_size=1000):
