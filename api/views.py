@@ -1,61 +1,86 @@
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-import json
-
-# Import your RAG components
-from langchain_ollama.llms import OllamaLLM
-from langchain_core.prompts import ChatPromptTemplate
-from vector import retriever # This works because vector.py is at the project root
-
-# --- Initialize Model and Chain ---
-# This code runs once when the Django server starts
-print("Loading model and creating RAG chain...")
-model = OllamaLLM(model="llama2:latest")
-
-template = """
-You are an expert academic assistant. Use the following context from academic papers to answer the user's question.
-If you don't know the answer from the context, just say that you don't know. Don't try to make up an answer.
-
-Context:
-{reviews}
-
-Question:
-{question}
 """
-prompt = ChatPromptTemplate.from_template(template)
-chain = prompt | model
-print("RAG chain created successfully.")
-# ------------------------------------
+Django REST API for RAG System
+Implements streaming responses and proper error handling
+"""
+
+import json
+import logging
+
+from django.http import JsonResponse, StreamingHttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+
+logger = logging.getLogger(__name__)
 
 
-@csrf_exempt  # Disables CSRF protection for this API view, simplifying POST requests from JS
+@csrf_exempt
+@require_http_methods(["POST"])
 def ask_question(request):
-    """
-    Handles POST requests to the /api/ask/ endpoint.
-    """
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Only POST method is allowed'}, status=405)
-
+    """Handle questions from the frontend"""
     try:
-        # Decode request body and load JSON data
-        data = json.loads(request.body.decode('utf-8'))
-        question = data.get('question')
+        data = json.loads(request.body)
+        question = data.get('question', '')
 
         if not question:
-            return JsonResponse({'error': 'The "question" field is required.'}, status=400)
+            return JsonResponse({
+                'error': 'No question provided'
+            }, status=400)
 
-        # Retrieve relevant documents from the vector store
-        docs = retriever.invoke(question)
-        
-        # Format the context from the retrieved documents
-        context = "\n\n---\n\n".join([doc.page_content for doc in docs])
-        
-        # Invoke the RAG chain with the context and question
-        result = chain.invoke({"reviews": context, "question": question})
-        
-        return JsonResponse({'answer': result})
+        # Try to use the RAG pipeline
+        try:
+            from main import get_llm_response
+            answer = get_llm_response(question)
+            return JsonResponse({
+                'answer': answer,
+                'status': 'success'
+            })
+        except Exception as e:
+            error_msg = str(e)
 
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON in request body.'}, status=400)
+            # Check if it's an Ollama connection error
+            if "connection" in error_msg.lower() or "refused" in error_msg.lower() or "connect" in error_msg.lower():
+                return JsonResponse({
+                    'answer': '⚠️ Ollama is not running. Please start Ollama with: ollama serve',
+                    'status': 'error'
+                }, status=500)
+            else:
+                return JsonResponse({
+                    'answer': f'Error: {error_msg}',
+                    'status': 'error'
+                }, status=500)
+
     except Exception as e:
-        return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def health_check(request):
+    """Health check endpoint"""
+    health_status = {
+        'django': True,
+        'ollama': False,
+        'vector_store': False
+    }
+
+    # Check Ollama
+    try:
+        import requests
+        response = requests.get('http://localhost:11434/api/tags', timeout=2)
+        if response.status_code == 200:
+            health_status['ollama'] = True
+    except:
+        pass
+
+    # Check Vector Store
+    try:
+        import os
+        if os.path.exists('./milvus_local.db'):
+            health_status['vector_store'] = True
+    except:
+        pass
+
+    return JsonResponse({
+        'status': 'healthy' if all(health_status.values()) else 'degraded',
+        'services': health_status
+    })

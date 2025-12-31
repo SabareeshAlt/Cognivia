@@ -1,109 +1,162 @@
-from langchain_ollama.llms import OllamaLLM
-from langchain_core.prompts import ChatPromptTemplate
-from vector import retriever
+import json
+import os
+import sys
+import warnings
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 
-# Initialize the Ollama LLM model
-model = OllamaLLM(model="llama2:latest")
+# Suppress Milvus async warnings
+warnings.filterwarnings("ignore", message=".*AsyncMilvusClient.*")
+warnings.filterwarnings("ignore", message=".*no running event loop.*")
 
-# Updated prompt template to academic context
-template = """
-You are an expert academic assistant. Use the following context from academic papers to answer the user's question.
-If you don't know the answer from the context, just say that you don't know. Don't try to make up an answer.
+# Add project root to path
+project_root = os.path.dirname(os.path.abspath(__file__))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-Context:
-{reviews}
 
-Question:
-{question}
-"""
+def get_llm_response(question):
+    """Get response from LLM with or without RAG"""
+    from langchain_ollama import ChatOllama
+    from langchain_core.prompts import ChatPromptTemplate
+    
+    # Initialize the LLM
+    llm = ChatOllama(model="llama3.2", temperature=0.7)
+    
+    # Try to use RAG if vector store exists
+    try:
+        from langchain_ollama import OllamaEmbeddings
+        from langchain_milvus import Milvus
+        
+        milvus_uri = os.path.join(project_root, "milvus_local.db")
+        
+        if os.path.exists(milvus_uri):
+            embeddings = OllamaEmbeddings(model="mxbai-embed-large")
+            
+            # Suppress async warnings during Milvus initialization
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                vector_store = Milvus(
+                    collection_name="AcademeRAG",
+                    embedding_function=embeddings,
+                    connection_args={"uri": milvus_uri},
+                )
+            
+            # Retrieve relevant documents
+            retriever = vector_store.as_retriever(search_kwargs={"k": 3})
+            docs = retriever.invoke(question)
+            
+            if docs:
+                context = "\n\n".join([doc.page_content for doc in docs])
+                
+                rag_prompt = ChatPromptTemplate.from_template("""
+                You are a helpful AI assistant. Answer the question based on the provided context.
+                If the context doesn't contain relevant information, say so and provide a general answer.
+                
+                Context:
+                {context}
+                
+                Question: {question}
+                
+                Answer:
+                """)
+                
+                chain = rag_prompt | llm
+                response = chain.invoke({"context": context, "question": question})
+                return response.content
+    except Exception as e:
+        print(f"RAG error (falling back to direct LLM): {e}")
+    
+    # Fallback: Direct LLM response without RAG
+    simple_prompt = ChatPromptTemplate.from_template("""
+    You are a helpful AI assistant. Please answer the following question:
+    
+    Question: {question}
+    
+    Answer:
+    """)
+    
+    chain = simple_prompt | llm
+    response = chain.invoke({"question": question})
+    return response.content
 
-# Create prompt and chain with model
-prompt = ChatPromptTemplate.from_template(template)
-chain = prompt | model
 
-# Command line interface loop to interact with the RAG chain
-while True:
-    print("\n\n--------------")
-    question = input("Ask your question (q to quit): ")
-    print("\n\n")
-    if question.lower() == "q":
-        break
+@csrf_exempt
+@require_http_methods(["POST"])
+def ask_question(request):
+    """Handle questions from the frontend"""
+    try:
+        data = json.loads(request.body)
+        question = data.get('question', '')
+        
+        if not question:
+            return JsonResponse({
+                'error': 'No question provided'
+            }, status=400)
+        
+        # Get response from LLM
+        try:
+            answer = get_llm_response(question)
+            return JsonResponse({
+                'answer': answer,
+                'status': 'success'
+            })
+        except Exception as e:
+            error_msg = str(e)
+            
+            # Check if it's an Ollama connection error
+            if "connection" in error_msg.lower() or "refused" in error_msg.lower() or "connect" in error_msg.lower():
+                return JsonResponse({
+                    'answer': '⚠️ **Ollama is not running.**\n\nPlease start Ollama first:\n```bash\nollama serve\n```\n\nThen ensure models are available:\n```bash\nollama pull llama3.2\nollama pull mxbai-embed-large\n```',
+                    'status': 'error',
+                    'error_type': 'ollama_not_running'
+                })
+            else:
+                return JsonResponse({
+                    'answer': f'⚠️ **Error:** {error_msg}',
+                    'status': 'error',
+                    'error_type': 'processing_error'
+                })
+                
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'error': 'Invalid JSON'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e)
+        }, status=500)
 
-    # Retrieve relevant documents from vector store
-    docs = retriever.invoke(question)
 
-    # Format retrieved documents as context for prompt
-    reviews = "\n".join([doc.page_content for doc in docs])
-
-    # Get answer from chain
-    result = chain.invoke({"reviews": reviews, "question": question})
-
-    print("Answer:", result)
-
-'''
-#Tell me about the academic process to join the college. (Sample q to test)
-from langchain_ollama.llms import OllamaLLM
-from langchain_core.prompts import ChatPromptTemplate
-from vector import retriever
-
-model = OllamaLLM(model="llama2:latest")
-
-template = """
-You are an expert in answering questions about a pizza restaurant.
-Here are some relevant reviews: {reviews}
-Here is the question to answer: {question}
-"""
-prompt = ChatPromptTemplate.from_template(template)
-chain = prompt | model
-
-while True:
-    print("\n\n--------------")
-    question = input("Ask your question (q to quit): ")
-    print("\n\n")
-    if question.lower() == "q":
-        break
-    docs = retriever.invoke(question)
-    reviews = "\n".join([doc.page_content for doc in docs])
-    result = chain.invoke({"reviews": reviews, "question": question})
-    print("Answer:", result)
-'''
-
-'''
-#Old codes
-
-from langchain_ollama.llms import OllamaLLM
-from langchain_core.prompts import ChatPromptTemplate
-from vector import retriever
-
-# Initialize the Ollama LLM model
-model = OllamaLLM(model="llama2:latest")
-
-# Updated prompt template to academic context
-template = """
-You are an expert academic assistant. Use the following context from academic papers to answer the user's question.
-If you don't know the answer from the context, just say that you don't know. Don't try to make up an answer.
-Context:
-{reviews}
-Question:
-{question}
-"""
-
-# Create prompt and chain with model
-prompt = ChatPromptTemplate.from_template(template)
-chain = prompt | model
-
-# Command line interface loop to interact with the RAG chain
-while True:
-    print("\n\n--------------")
-    question = input("Ask your question (q to quit): ")
-    print("\n\n")
-    if question.lower() == "q":
-        break
-    # Retrieve relevant documents from vector store
-    docs = retriever.invoke(question)
-    # Format retrieved documents as context for prompt
-    reviews = "\n".join([doc.page_content for doc in docs])
-    # Get answer from chain
-    result = chain.invoke({"reviews": reviews, "question": question})
-    print("Answer:", result)
-'''
+@csrf_exempt
+@require_http_methods(["GET"])
+def health_check(request):
+    """Health check endpoint"""
+    health_status = {
+        'django': True,
+        'ollama': False,
+        'vector_store': False
+    }
+    
+    # Check Ollama
+    try:
+        import requests
+        response = requests.get('http://localhost:11434/api/tags', timeout=2)
+        if response.status_code == 200:
+            health_status['ollama'] = True
+    except:
+        pass
+    
+    # Check Vector Store
+    try:
+        milvus_uri = os.path.join(project_root, "milvus_local.db")
+        if os.path.exists(milvus_uri):
+            health_status['vector_store'] = True
+    except:
+        pass
+    
+    return JsonResponse({
+        'status': 'healthy' if all(health_status.values()) else 'degraded',
+        'services': health_status
+    })

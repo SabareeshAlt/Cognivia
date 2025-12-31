@@ -4,7 +4,7 @@ milvus_uri = "https://cloud.zilliz.com/orgs/org-ylznfpfacshmpcchxifymn/projects/
 # Collection name inside Milvus
 collection_name = "AcademeRAG"
 '''
-
+#milvus_uri = "https://in03-200a60c94a793fc.serverless.aws-eu-central-1.cloud.zilliz.com"
 #4919d7d24e84b881bac067ed51e05c4749fe5af98b16a4d8249dbbff6684e5d86825b2de320d795b33d5a82e540efd86958f289c
 from langchain_ollama import OllamaEmbeddings
 from langchain_milvus import Milvus

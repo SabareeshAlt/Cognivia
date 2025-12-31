@@ -1,0 +1,24 @@
+# Django Core (Compatible with Python 3.9)
+Django>=4.2,<5.0
+djangorestframework>=3.14.0
+django-cors-headers>=4.3.0
+
+# RAG and LLM
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-community>=0.0.20
+langchain-ollama>=0.0.1
+
+# Document Processing
+pypdf>=4.0.0
+
+# Vector Stores
+pymilvus>=2.3.0
+langchain-milvus>=0.2.0
+
+# Web Server
+gunicorn>=21.2.0
+
+# Utilities
+python-dotenv>=1.0.0
+requests>=2.31.0
