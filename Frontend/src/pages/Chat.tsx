@@ -3,9 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Bot, Send, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
-// Django backend API URL - uses proxy in development, direct URL as fallback
+// Django backend API URL - uses proxy in development
 const API_URL = "/api";
+
+// Enable streaming for real-time responses
+const USE_STREAMING = true;
 
 interface Message {
   id: string;
@@ -33,32 +38,89 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) {
-      toast.error("Please enter a message");
-      return;
+  // Streaming fetch handler
+  const handleStreamingSubmit = async (question: string) => {
+    const aiMessageId = (Date.now() + 1).toString();
+    
+    // Add empty AI message that will be updated with streamed content
+    setMessages((prev) => [
+      ...prev,
+      { id: aiMessageId, role: "assistant", content: "" },
+    ]);
+
+    try {
+      const response = await fetch(`${API_URL}/ask/stream/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ question }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("No response body");
+      }
+
+      let fullContent = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        fullContent += chunk;
+
+        // Update the AI message with streamed content
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === aiMessageId ? { ...msg, content: fullContent } : msg
+          )
+        );
+      }
+
+      // Final update
+      if (!fullContent.trim()) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === aiMessageId
+              ? { ...msg, content: "No response received from the AI." }
+              : msg
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Streaming error:", error);
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === aiMessageId
+            ? {
+                ...msg,
+                content:
+                  "⚠️ SYSTEM ERROR: Failed to connect to the AI core. Please ensure the Django server is running.",
+              }
+            : msg
+        )
+      );
+      toast.error("Failed to connect to the AI server");
     }
+  };
 
-    if (isLoading) return;
-
-    // Add user message
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: input,
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsLoading(true);
-
+  // Non-streaming fetch handler
+  const handleNonStreamingSubmit = async (question: string) => {
     try {
       const response = await fetch(`${API_URL}/ask/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ question: input }),
+        body: JSON.stringify({ question }),
       });
 
       if (!response.ok) {
@@ -66,7 +128,7 @@ const Chat = () => {
       }
 
       const data = await response.json();
-      
+
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -79,9 +141,40 @@ const Chat = () => {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "⚠️ SYSTEM ERROR: Failed to connect to the AI core. Please ensure the Django server is running at http://127.0.0.1:8000",
+        content:
+          "⚠️ SYSTEM ERROR: Failed to connect to the AI core. Please ensure the Django server is running at http://127.0.0.1:8000",
       };
       setMessages((prev) => [...prev, errorMessage]);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim()) {
+      toast.error("Please enter a message");
+      return;
+    }
+
+    if (isLoading) return;
+
+    const question = input;
+
+    // Add user message
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: question,
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
+
+    try {
+      if (USE_STREAMING) {
+        await handleStreamingSubmit(question);
+      } else {
+        await handleNonStreamingSubmit(question);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -121,15 +214,59 @@ const Chat = () => {
                       : "bg-card border border-border"
                   }`}
                 >
-                  <p
-                    className={`text-sm leading-relaxed whitespace-pre-wrap ${
-                      message.role === "user"
-                        ? "text-secondary-foreground"
-                        : "text-foreground"
-                    }`}
-                  >
-                    {message.content}
-                  </p>
+                  {message.role === "user" ? (
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap text-secondary-foreground">
+                      {message.content}
+                    </p>
+                  ) : (
+                    <div className="prose prose-sm prose-invert max-w-none text-foreground">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                          ul: ({ children }) => <ul className="list-disc pl-4 mb-2">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal pl-4 mb-2">{children}</ol>,
+                          li: ({ children }) => <li className="mb-1">{children}</li>,
+                          code: ({ className, children, ...props }) => {
+                            const isInline = !className;
+                            return isInline ? (
+                              <code className="bg-muted px-1 py-0.5 rounded text-xs" {...props}>
+                                {children}
+                              </code>
+                            ) : (
+                              <code className="block bg-muted p-2 rounded text-xs overflow-x-auto my-2" {...props}>
+                                {children}
+                              </code>
+                            );
+                          },
+                          pre: ({ children }) => <pre className="bg-muted p-3 rounded-lg overflow-x-auto my-2">{children}</pre>,
+                          h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                          h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
+                          h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                          a: ({ href, children }) => (
+                            <a href={href} className="text-primary underline" target="_blank" rel="noopener noreferrer">
+                              {children}
+                            </a>
+                          ),
+                          blockquote: ({ children }) => (
+                            <blockquote className="border-l-2 border-primary pl-3 italic my-2">{children}</blockquote>
+                          ),
+                          table: ({ children }) => (
+                            <table className="border-collapse border border-border my-2 w-full">{children}</table>
+                          ),
+                          th: ({ children }) => (
+                            <th className="border border-border px-2 py-1 bg-muted font-semibold">{children}</th>
+                          ),
+                          td: ({ children }) => (
+                            <td className="border border-border px-2 py-1">{children}</td>
+                          ),
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

@@ -1,16 +1,11 @@
 import json
 import os
 import sys
-import warnings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-# Suppress Milvus async warnings
-warnings.filterwarnings("ignore", message=".*AsyncMilvusClient.*")
-warnings.filterwarnings("ignore", message=".*no running event loop.*")
-
-# Add project root to path
+# Add project root to path (this file is in Project/)
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
@@ -33,15 +28,11 @@ def get_llm_response(question):
         
         if os.path.exists(milvus_uri):
             embeddings = OllamaEmbeddings(model="mxbai-embed-large")
-            
-            # Suppress async warnings during Milvus initialization
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                vector_store = Milvus(
-                    collection_name="AcademeRAG",
-                    embedding_function=embeddings,
-                    connection_args={"uri": milvus_uri},
-                )
+            vector_store = Milvus(
+                collection_name="AcademeRAG",
+                embedding_function=embeddings,
+                connection_args={"uri": milvus_uri},
+            )
             
             # Retrieve relevant documents
             retriever = vector_store.as_retriever(search_kwargs={"k": 3})

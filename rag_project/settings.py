@@ -131,46 +131,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:8000',
     'http://localhost:8000',
-    'http://127.0.0.1:8080',
-    'http://localhost:8080',
     'http://127.0.0.1:3000',
     'http://localhost:3000',
 ]
 CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
-
-
-# --- Logging Configuration ---
-# Suppress Milvus async warnings
-import warnings
-warnings.filterwarnings("ignore", message=".*AsyncMilvusClient.*")
-warnings.filterwarnings("ignore", message=".*no running event loop.*")
-
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'filters': {
-        'suppress_milvus_warnings': {
-            '()': 'django.utils.log.CallbackFilter',
-            'callback': lambda record: 'AsyncMilvusClient' not in record.getMessage() and 'event loop' not in record.getMessage(),
-        },
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'filters': ['suppress_milvus_warnings'],
-        },
-    },
-    'root': {
-        'handlers': ['console'],
-        'level': 'WARNING',
-    },
-    'loggers': {
-        'pymilvus': {
-            'handlers': ['console'],
-            'level': 'ERROR',
-            'propagate': False,
-        },
-    },
-}
 

@@ -312,7 +312,6 @@
       position: relative;
       z-index: 3;
       background: rgba(5, 10, 20, 0.95);
-      overflow: hidden;
     }
     .block
     {
@@ -355,30 +354,12 @@
     .chat-container {
       flex: 1;
       overflow-y: auto;
-      overflow-x: hidden;
       padding: 25px;
       display: flex;
       flex-direction: column;
       gap: 18px;
       background: rgba(5, 10, 20, 0.7);
-      min-height: 0;
-      width: 100%;
-      scroll-behavior: smooth;
-    }
-    /* Custom scrollbar styling */
-    .chat-container::-webkit-scrollbar {
-      width: 8px;
-    }
-    .chat-container::-webkit-scrollbar-track {
-      background: rgba(0, 20, 40, 0.5);
-      border-radius: 4px;
-    }
-    .chat-container::-webkit-scrollbar-thumb {
-      background: rgba(0, 200, 255, 0.5);
-      border-radius: 4px;
-    }
-    .chat-container::-webkit-scrollbar-thumb:hover {
-      background: rgba(0, 200, 255, 0.8);
+      min-height: 0; /* FIX: Allows container to shrink and enables scrolling */
     }
     .message {
       max-width: 85%;
@@ -386,9 +367,7 @@
       border-radius: 8px;
       line-height: 1.6;
       white-space: pre-wrap;
-      word-wrap: break-word;
-      overflow-wrap: break-word;
-      word-break: break-word;
+      word-wrap: break-word; /* FIX: Ensures text wraps properly */
       animation: fadeIn .5s ease forwards;
       box-shadow: 0 4px 15px rgba(0,0,0,0.3);
       position: relative;
@@ -423,8 +402,6 @@
       color: #7cf;
       border-bottom-left-radius: 3px;
       border: 1px solid rgba(0, 200, 255, 0.2);
-      width: fit-content;
-      max-width: 85%;
     }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); }}
     @keyframes shineMessage { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
@@ -579,13 +556,7 @@
       msgDiv.className = "message " + sender;
       msgDiv.textContent = text;
       chat.appendChild(msgDiv);
-      // Smooth scroll to bottom
-      setTimeout(() => {
-        chat.scrollTo({
-          top: chat.scrollHeight,
-          behavior: 'smooth'
-        });
-      }, 100);
+      chat.scrollTop = chat.scrollHeight;
     }
 
     async function handleSendMessage() {
@@ -599,8 +570,7 @@
       thinkingMsg.className = "message bot";
       thinkingMsg.textContent = "Processing... Retrieving context and generating response...";
       chat.appendChild(thinkingMsg);
-      // Scroll to show thinking message
-      chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' });
+      chat.scrollTop = chat.scrollHeight;
       try {
         const response = await fetch('http://127.0.0.1:8000/api/ask/', {
           method: 'POST',
@@ -639,3 +609,4 @@
   </script>
 </body>
 </html>
+
