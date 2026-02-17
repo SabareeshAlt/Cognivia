@@ -6,6 +6,7 @@ from functools import lru_cache
 # --- CRITICAL: Disable Async for Django ---
 os.environ["MILVUS_ASYNC"] = "0"
 
+from dotenv import load_dotenv
 from pypdf import PdfReader
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_milvus import Milvus
@@ -19,25 +20,37 @@ logger = logging.getLogger(__name__)
 
 # Project Paths
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-# Look for documents inside the 'api' folder
-PDF_DIR = os.path.join(PROJECT_ROOT, "api", "documents")
+PDF_DIR = PROJECT_ROOT
 
-# Create folder if it doesn't exist
-if not os.path.exists(PDF_DIR):
-    os.makedirs(PDF_DIR)
+# Load .env from project root
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+
+# Also create api/documents folder for future uploads
+api_docs_dir = os.path.join(PROJECT_ROOT, "api", "documents")
+if not os.path.exists(api_docs_dir):
+    os.makedirs(api_docs_dir)
 
 def _get_milvus_config():
-    """Returns Milvus configuration."""
-    milvus_uri = os.getenv("ACADEMERAG_MILVUS_URI", os.path.join(PROJECT_ROOT, "milvus_local.db"))
-    milvus_token = os.getenv("ACADEMERAG_MILVUS_TOKEN", "")
-    is_cloud = milvus_uri.startswith("https://") or milvus_uri.startswith("http://")
-    
+    """Returns Milvus Cloud configuration. Enforces Zilliz Cloud — no local fallback."""
+    milvus_uri = os.getenv("ACADEMERAG_MILVUS_URI", "https://in03-200a60c94a793fc.serverless.aws-eu-central-1.cloud.zilliz.com")
+    milvus_token = os.getenv("ACADEMERAG_MILVUS_TOKEN", "4919d7d24e84b881bac067ed51e05c4749fe5af98b16a4d8249dbbff6684e5d86825b2de320d795b33d5a82e540efd86958f289c")
+
+    if not milvus_uri or not milvus_uri.startswith("https://"):
+        raise ValueError(
+            "ACADEMERAG_MILVUS_URI must be set to a Zilliz Cloud URL (https://...) in .env. "
+            "Local milvus-lite is NOT supported."
+        )
+    if not milvus_token:
+        raise ValueError(
+            "ACADEMERAG_MILVUS_TOKEN must be set in .env with your Zilliz Cloud API key."
+        )
+
     return {
-        "uri": "https://in03-200a60c94a793fc.serverless.aws-eu-central-1.cloud.zilliz.com",
-        "token": "https://in03-200a60c94a793fc.serverless.aws-eu-central-1.cloud.zilliz.com",
-        "collection": "AcademeRAG",
-        "model": "mxbai-embed-large",
-        "is_cloud": is_cloud
+        "uri": milvus_uri,
+        "token": milvus_token,
+        "collection": os.getenv("COLLECTION_NAME", "AcademeRAG"),
+        "model": os.getenv("EMBEDDING_MODEL", "mxbai-embed-large"),
+        "is_cloud": True,
     }
 
 def load_and_chunk_pdfs():
@@ -65,13 +78,14 @@ def load_and_chunk_pdfs():
     return all_chunks
 
 def initialize_vector_store(force_reindex=False):
-    """Initializes and optionally populates the vector store."""
+    """Initializes and optionally populates the Milvus Cloud vector store."""
     cfg = _get_milvus_config()
-    embeddings = OllamaEmbeddings(model=cfg["model"])
+    embeddings = OllamaEmbeddings(
+        model=cfg["model"],
+        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+    )
     
-    conn_args = {"uri": cfg["uri"]}
-    if cfg["is_cloud"] and cfg["token"]:
-        conn_args["token"] = cfg["token"]
+    conn_args = {"uri": cfg["uri"], "token": cfg["token"]}
 
     try:
         vector_store = Milvus(
@@ -81,15 +95,16 @@ def initialize_vector_store(force_reindex=False):
             auto_id=True,
             drop_old=force_reindex 
         )
+        logger.info(f"✅ Connected to Milvus Cloud: {cfg['uri'][:40]}...")
     except Exception as e:
-        logger.error(f"Milvus Connection Error: {e}")
+        logger.error(f"Milvus Cloud Connection Error: {e}")
         return None
 
     # Auto-Index Check
     if not force_reindex:
         try:
             if not vector_store.similarity_search("test", k=1):
-                print("⚠️  Collection appears empty. Triggering index...")
+                logger.warning("⚠️  Collection appears empty. Triggering index...")
                 force_reindex = True
         except:
             force_reindex = True
@@ -98,7 +113,7 @@ def initialize_vector_store(force_reindex=False):
         docs = load_and_chunk_pdfs()
         if docs:
             vector_store.add_documents(docs)
-            print(f"✅ Indexed {len(docs)} chunks into Milvus.")
+            logger.info(f"✅ Indexed {len(docs)} chunks into Milvus Cloud.")
             
     return vector_store
 

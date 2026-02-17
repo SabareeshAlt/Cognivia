@@ -1,0 +1,17 @@
+/* 1. Imports must be FIRST */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+
+/* 2. Then Tailwind Directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 3. Your custom layers */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    /* ... rest of your variables ... */
+  }
+}
+/* ... rest of your CSS ... */

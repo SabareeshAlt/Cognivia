@@ -577,20 +577,28 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ question }),
         });
-        if (!response.ok) {
-          throw new Error(`Network response was not ok: ${response.statusText}`);
-        }
         const data = await response.json();
         chat.removeChild(thinkingMsg);
+        if (!response.ok) {
+          // Show the actual backend error instead of a generic message
+          addMessage("⚠️ Backend Error (" + response.status + "): " + (data.error || response.statusText), "bot");
+          return;
+        }
         if (data.answer) {
           addMessage(data.answer, "bot");
+        } else if (data.error) {
+          addMessage("⚠️ " + data.error, "bot");
         } else {
-          addMessage(data.error || "An unknown error occurred.", "bot");
+          addMessage("Received an empty response from the server.", "bot");
         }
       } catch (error) {
-        console.error('Error:', error);
+        console.error('Fetch error:', error);
         chat.removeChild(thinkingMsg);
-        addMessage("SYSTEM ERROR: Failed to connect to the AI core. Ensure the Django server is running.", "bot");
+        if (error instanceof TypeError && error.message.includes('fetch')) {
+          addMessage("CONNECTION ERROR: Cannot reach the Django server at http://127.0.0.1:8000. Is it running?", "bot");
+        } else {
+          addMessage("SYSTEM ERROR: " + error.message, "bot");
+        }
       } finally {
         input.disabled = false;
         sendBtn.disabled = false;
