@@ -5,73 +5,58 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-# Add project root to path (this file is in Project/)
+# Add project root to path
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+# Import the robust retriever from our vector module
+# This handles the Local vs Cloud logic automatically
+from .vector import get_retriever
 
 def get_llm_response(question):
     """Get response from LLM with or without RAG"""
     from langchain_ollama import ChatOllama
     from langchain_core.prompts import ChatPromptTemplate
+    from langchain_core.output_parsers import StrOutputParser
     
     # Initialize the LLM
     llm = ChatOllama(model="llama3.2", temperature=0.7)
     
-    # Try to use RAG if vector store exists
+    # Try to use RAG
     try:
-        from langchain_ollama import OllamaEmbeddings
-        from langchain_milvus import Milvus
+        # Get the retriever from vector.py
+        retriever = get_retriever(k=3)
         
-        milvus_uri = os.path.join(project_root, "milvus_local.db")
+        # Retrieve docs
+        docs = retriever.invoke(question)
         
-        if os.path.exists(milvus_uri):
-            embeddings = OllamaEmbeddings(model="mxbai-embed-large")
-            vector_store = Milvus(
-                collection_name="AcademeRAG",
-                embedding_function=embeddings,
-                connection_args={"uri": milvus_uri},
-            )
+        if docs:
+            context = "\n\n".join([doc.page_content for doc in docs])
             
-            # Retrieve relevant documents
-            retriever = vector_store.as_retriever(search_kwargs={"k": 3})
-            docs = retriever.invoke(question)
+            rag_prompt = ChatPromptTemplate.from_template("""
+            You are an academic AI assistant.
+            Answer strictily based on the Context below.
             
-            if docs:
-                context = "\n\n".join([doc.page_content for doc in docs])
-                
-                rag_prompt = ChatPromptTemplate.from_template("""
-                You are a helpful AI assistant. Answer the question based on the provided context.
-                If the context doesn't contain relevant information, say so and provide a general answer.
-                
-                Context:
-                {context}
-                
-                Question: {question}
-                
-                Answer:
-                """)
-                
-                chain = rag_prompt | llm
-                response = chain.invoke({"context": context, "question": question})
-                return response.content
+            Context:
+            {context}
+
+            User Question:
+            {question}
+            """)
+            
+            chain = rag_prompt | llm | StrOutputParser()
+            response = chain.invoke({"context": context, "question": question})
+            return response
+            
     except Exception as e:
         print(f"RAG error (falling back to direct LLM): {e}")
     
-    # Fallback: Direct LLM response without RAG
-    simple_prompt = ChatPromptTemplate.from_template("""
-    You are a helpful AI assistant. Please answer the following question:
-    
-    Question: {question}
-    
-    Answer:
-    """)
-    
-    chain = simple_prompt | llm
+    # Fallback: Direct LLM response
+    simple_prompt = ChatPromptTemplate.from_template("Answer this question: {question}")
+    chain = simple_prompt | llm | StrOutputParser()
     response = chain.invoke({"question": question})
-    return response.content
-
+    return response
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -82,72 +67,31 @@ def ask_question(request):
         question = data.get('question', '')
         
         if not question:
-            return JsonResponse({
-                'error': 'No question provided'
-            }, status=400)
+            return JsonResponse({'error': 'No question provided'}, status=400)
         
-        # Get response from LLM
-        try:
-            answer = get_llm_response(question)
-            return JsonResponse({
-                'answer': answer,
-                'status': 'success'
-            })
-        except Exception as e:
-            error_msg = str(e)
-            
-            # Check if it's an Ollama connection error
-            if "connection" in error_msg.lower() or "refused" in error_msg.lower() or "connect" in error_msg.lower():
-                return JsonResponse({
-                    'answer': '⚠️ **Ollama is not running.**\n\nPlease start Ollama first:\n```bash\nollama serve\n```\n\nThen ensure models are available:\n```bash\nollama pull llama3.2\nollama pull mxbai-embed-large\n```',
-                    'status': 'error',
-                    'error_type': 'ollama_not_running'
-                })
-            else:
-                return JsonResponse({
-                    'answer': f'⚠️ **Error:** {error_msg}',
-                    'status': 'error',
-                    'error_type': 'processing_error'
-                })
-                
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'error': 'Invalid JSON'
-        }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'error': str(e)
-        }, status=500)
+        answer = get_llm_response(question)
+        return JsonResponse({'answer': answer, 'status': 'success'})
 
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 @csrf_exempt
 @require_http_methods(["GET"])
 def health_check(request):
     """Health check endpoint"""
-    health_status = {
-        'django': True,
-        'ollama': False,
-        'vector_store': False
-    }
+    health_status = {'django': True, 'ollama': False, 'vector_store': False}
     
     # Check Ollama
     try:
         import requests
-        response = requests.get('http://localhost:11434/api/tags', timeout=2)
-        if response.status_code == 200:
+        if requests.get('http://localhost:11434/', timeout=1).status_code == 200:
             health_status['ollama'] = True
-    except:
-        pass
+    except: pass
     
-    # Check Vector Store
+    # Check Vector Store (using the vector module)
     try:
-        milvus_uri = os.path.join(project_root, "milvus_local.db")
-        if os.path.exists(milvus_uri):
-            health_status['vector_store'] = True
-    except:
-        pass
+        get_retriever()
+        health_status['vector_store'] = True
+    except: pass
     
-    return JsonResponse({
-        'status': 'healthy' if all(health_status.values()) else 'degraded',
-        'services': health_status
-    })
+    return JsonResponse({'status': 'healthy', 'services': health_status})
