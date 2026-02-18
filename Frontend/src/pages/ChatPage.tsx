@@ -1,111 +1,106 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bot, Rocket, X, MessageSquare, Plus, LogOut, Menu, User } from "lucide-react";
+import { Bot, Rocket, X, MessageSquare, Plus, LogOut, Menu, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import ConfirmDialog from "@/components/ConfirmDialog"; 
 
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-}
-
-interface Chat {
-  id: string;
-  title: string;
-  messages: Message[];
-}
+import ConfirmDialog from "@/components/ConfirmDialog";
+import { authStorage } from "@/lib/auth";
+import { apiClient, ApiError } from "@/lib/api-client";
+import { config } from "@/lib/config";
+import { logTelemetry, getTelemetryEvents } from "@/lib/telemetry";
+import { sanitizeText } from "@/lib/sanitize";
+import { useChatStore } from "@/store/chat-store";
 
 const ChatPage = () => {
   const navigate = useNavigate();
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [deleteChatId, setDeleteChatId] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+
+  const chats = useChatStore((state) => state.chats);
+  const activeChatId = useChatStore((state) => state.activeChatId);
+  const createChat = useChatStore((state) => state.createChat);
+  const setActiveChat = useChatStore((state) => state.setActiveChat);
+  const deleteChat = useChatStore((state) => state.deleteChat);
+  const appendMessage = useChatStore((state) => state.appendMessage);
+  const updateMessage = useChatStore((state) => state.updateMessage);
+  const updateTitleIfNew = useChatStore((state) => state.updateTitleIfNew);
+  const resetChats = useChatStore((state) => state.reset);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const activeChat = chats.find((c) => c.id === activeChatId);
+  const activeChat = useMemo(() => chats.find((chat) => chat.id === activeChatId), [chats, activeChatId]);
+  const isWaitingForFirstChunk = Boolean(
+    isLoading &&
+      activeChat?.messages.length &&
+      activeChat.messages[activeChat.messages.length - 1].role === "assistant" &&
+      activeChat.messages[activeChat.messages.length - 1].content.trim() === "",
+  );
 
   useEffect(() => {
-    if (!localStorage.getItem("rag_user")) {
+    if (!authStorage.getUser()) {
       navigate("/");
       return;
     }
-    const saved = localStorage.getItem("rag_chats");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      setChats(parsed);
-      if (parsed.length > 0) setActiveChatId(parsed[0].id);
-      else handleNewChat();
-    } else {
-      handleNewChat();
+
+    if (!activeChatId) {
+      createChat();
     }
-  }, [navigate]);
+  }, [activeChatId, createChat, navigate]);
 
   useEffect(() => {
-    if (chats.length > 0) {
-      localStorage.setItem("rag_chats", JSON.stringify(chats));
-    }
-  }, [chats]);
+    const onOnline = () => setIsOffline(false);
+    const onOffline = () => setIsOffline(true);
+
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeChat?.messages, isLoading]);
 
   const handleNewChat = () => {
-    const newChat: Chat = {
-      id: Date.now().toString(),
-      title: "New Chat",
-      messages: [
-        { id: "intro", role: "assistant", content: "AcademeRAG Ready. Ask me about your uploaded documents!" },
-      ],
-    };
-    setChats((prev) => [newChat, ...prev]);
-    setActiveChatId(newChat.id);
+    createChat();
   };
 
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim() || !activeChatId) return;
 
-    const currentInput = input;
+    const currentInput = sanitizeText(input);
     setInput("");
     setIsLoading(true);
 
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: currentInput };
+    appendMessage(activeChatId, { id: Date.now().toString(), role: "user", content: currentInput });
+    updateTitleIfNew(activeChatId, currentInput);
 
-    setChats((prev) =>
-      prev.map((c) => {
-        if (c.id !== activeChatId) return c;
-        const updatedMsgs = [...c.messages, userMsg];
-        let newTitle = c.title;
-        if (c.title === "New Chat") {
-           newTitle = currentInput.slice(0, 30) + (currentInput.length > 30 ? "..." : "");
-        }
-        return { ...c, title: newTitle, messages: updatedMsgs };
-      })
-    );
+    if (isOffline) {
+      appendMessage(activeChatId, {
+        id: `${Date.now()}-offline`,
+        role: "assistant",
+        content: "⚠️ You appear to be offline. Reconnect and try again.",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    const botMsgId = `${Date.now()}-assistant`;
+    appendMessage(activeChatId, { id: botMsgId, role: "assistant", content: "" });
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/ask/stream/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: currentInput }),
-      });
-
-      if (!response.ok) throw new Error("Network error");
-      if (!response.body) throw new Error("No response body");
-
-      const botMsgId = (Date.now() + 1).toString();
-      setChats((prev) =>
-        prev.map((c) => 
-          c.id === activeChatId 
-            ? { ...c, messages: [...c.messages, { id: botMsgId, role: "assistant", content: "" }] } 
-            : c
-        )
-      );
+      const response = await apiClient.askStream(currentInput);
+      if (!response.body) {
+        throw new ApiError("No response body", 500, "NO_RESPONSE_BODY");
+      }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -115,29 +110,34 @@ const ChatPage = () => {
         const { done, value } = await reader.read();
         if (done) break;
         botText += decoder.decode(value, { stream: true });
-        setChats((prev) =>
-          prev.map((c) => {
-            if (c.id !== activeChatId) return c;
-            return {
-              ...c,
-              messages: c.messages.map((m) =>
-                m.id === botMsgId ? { ...m, content: botText } : m
-              ),
-            };
-          })
-        );
+        updateMessage(activeChatId, botMsgId, sanitizeText(botText));
       }
 
+      logTelemetry("chat.response_complete", {
+        chatId: activeChatId,
+        length: botText.length,
+      });
     } catch (error) {
-      const errMsg = error instanceof Error ? error.message : "Unknown error";
-      toast.error("Failed to connect to RAG server: " + errMsg);
-      setChats((prev) =>
-        prev.map((c) => 
-          c.id === activeChatId 
-            ? { ...c, messages: [...c.messages, { id: Date.now().toString(), role: "assistant", content: `⚠️ Connection Error: ${errMsg}\n\nCheck: Is the Django server running on http://127.0.0.1:8000?` }] } 
-            : c
-        )
+      const apiError = error instanceof ApiError ? error : new ApiError("Unknown error", 500, "UNKNOWN");
+
+      if (apiError.status === 401 || apiError.code === "NO_REFRESH_TOKEN") {
+        authStorage.clearAll();
+        navigate("/");
+        return;
+      }
+
+      toast.error(apiError.traceId ? `${apiError.message} (trace: ${apiError.traceId})` : apiError.message);
+      updateMessage(
+        activeChatId,
+        botMsgId,
+        sanitizeText(`⚠️ ${apiError.message}\n\nCheck server availability at ${config.apiBaseUrl}.`),
       );
+
+      logTelemetry("chat.error", {
+        status: apiError.status,
+        code: apiError.code,
+        traceId: apiError.traceId,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -145,98 +145,120 @@ const ChatPage = () => {
 
   const handleDeleteChat = () => {
     if (!deleteChatId) return;
-    const remaining = chats.filter((c) => c.id !== deleteChatId);
-    setChats(remaining);
-    localStorage.setItem("rag_chats", JSON.stringify(remaining));
-    if (remaining.length === 0) handleNewChat();
-    else if (activeChatId === deleteChatId) setActiveChatId(remaining[0].id);
+
+    deleteChat(deleteChatId);
+    if (activeChatId === deleteChatId && chats.length <= 1) {
+      createChat();
+    }
     setDeleteChatId(null);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("rag_user");
+    authStorage.clearAll();
+    resetChats();
     setShowLogoutDialog(false);
     navigate("/");
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 font-sans text-gray-900">
-      {/* Sidebar */}
+    <div className="flex h-screen bg-background text-foreground">
       <aside
-        className={`${sidebarOpen ? "w-[340px]" : "w-0"} flex flex-col overflow-hidden transition-all duration-300 shadow-2xl z-20`}
-        style={{ background: "linear-gradient(180deg, #355CDE 0%, #1a2a6c 100%)" }}
+        className={`${sidebarOpen ? "w-[340px]" : "w-0"} z-20 flex flex-col overflow-hidden border-r border-border transition-all duration-300`}
+        style={{ background: "linear-gradient(180deg, hsl(var(--brand-start)) 0%, hsl(var(--brand-end)) 100%)" }}
       >
-        <div className="flex-shrink-0 px-8 pt-10 pb-8">
-          <h1 className="text-2xl font-extrabold tracking-wide text-white">ACADEME RAG</h1>
+        <div className="flex-shrink-0 px-8 pb-8 pt-10">
+          <h1 className="text-2xl font-extrabold tracking-wide text-primary-foreground">ACADEME RAG</h1>
         </div>
 
         <div className="px-6">
           <button
             onClick={handleNewChat}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 py-4 text-base font-bold text-white transition-all hover:bg-white/20 border border-white/10 shadow-lg"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 py-4 text-base font-bold text-primary-foreground transition-all hover:bg-white/20"
           >
             <Plus size={20} /> New Chat
           </button>
         </div>
 
-        <div className="mt-8 flex-1 overflow-y-auto px-6 scrollbar-thin scrollbar-thumb-white/20">
-          <p className="mb-4 px-2 text-xs font-bold uppercase tracking-wider text-white/50">
-            Previous Chats
-          </p>
+        <div className="mt-8 flex-1 overflow-y-auto px-6">
+          <p className="mb-4 px-2 text-xs font-bold uppercase tracking-wider text-white/60">Previous Chats</p>
           {chats.map((chat) => (
-            <div
+            <button
               key={chat.id}
-              className={`group mb-3 flex cursor-pointer items-center gap-3 rounded-xl px-4 py-4 text-sm transition-all ${
-                chat.id === activeChatId
-                  ? "bg-white/20 text-white font-semibold shadow-inner"
-                  : "text-white/80 hover:bg-white/10"
+              className={`group mb-3 flex w-full items-center gap-3 rounded-xl px-4 py-4 text-left text-sm transition-all ${
+                chat.id === activeChatId ? "bg-white/20 font-semibold text-white" : "text-white/80 hover:bg-white/10"
               }`}
-              onClick={() => setActiveChatId(chat.id)}
+              onClick={() => setActiveChat(chat.id)}
             >
-              <MessageSquare size={18} className="flex-shrink-0 opacity-70" />
+              <MessageSquare size={18} className="opacity-70" />
               <span className="flex-1 truncate text-base">{chat.title}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
+              <span
+                onClick={(event) => {
+                  event.stopPropagation();
                   setDeleteChatId(chat.id);
                 }}
-                className="opacity-0 group-hover:opacity-100 transition-opacity text-white/50 hover:text-white"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setDeleteChatId(chat.id);
+                  }
+                }}
+                className="opacity-0 transition-opacity group-hover:opacity-100"
+                role="button"
+                tabIndex={0}
+                aria-label={`Delete ${chat.title}`}
               >
                 <X size={16} />
-              </button>
-            </div>
+              </span>
+            </button>
           ))}
         </div>
 
-        <div className="flex-shrink-0 p-6 border-t border-white/10">
+        <div className="flex-shrink-0 border-t border-white/10 p-6">
+          {config.featureFlags.diagnosticsPanel && (
+            <button
+              onClick={() => setShowDiagnostics((current) => !current)}
+              className="mb-3 w-full rounded-xl border border-white/20 py-3 text-sm font-bold uppercase tracking-wider text-primary-foreground hover:bg-white/10"
+            >
+              Diagnostics
+            </button>
+          )}
           <button
             onClick={() => setShowLogoutDialog(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl py-4 text-sm font-bold uppercase tracking-wider text-white/90 transition-all hover:bg-red-500/20 hover:text-white"
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-4 text-sm font-bold uppercase tracking-wider text-primary-foreground/90 transition-all hover:bg-red-500/20 hover:text-white"
           >
             <LogOut size={18} /> Logout
           </button>
         </div>
       </aside>
 
-      {/* Main Chat Area */}
-      <main className="flex flex-1 flex-col relative bg-gray-50 h-screen">
-        {/* Top bar (Hidden or Minimal) */}
+      <main className="relative flex h-screen flex-1 flex-col bg-background">
         {!sidebarOpen && (
-           <div className="absolute top-4 left-4 z-50">
-              <button onClick={() => setSidebarOpen(true)} className="p-2 bg-white rounded-full shadow-md text-gray-600 hover:text-blue-600">
-                <Menu size={24} />
-              </button>
-           </div>
+          <div className="absolute left-4 top-4 z-50">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="rounded-full bg-card p-2 text-foreground shadow-md ring-1 ring-border hover:text-primary"
+            >
+              <Menu size={24} />
+            </button>
+          </div>
         )}
 
-        {/* Messages */}
+        {(isOffline || !config.featureFlags.chatEnabled) && (
+          <div className="mx-6 mt-4 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
+            <AlertTriangle size={16} />
+            {isOffline
+              ? "Offline mode: requests are paused until your connection is restored."
+              : "Chat is disabled by feature flag kill-switch."}
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto px-6 py-8 pb-32">
-          <div className="max-w-[1000px] mx-auto space-y-8">
+          <div className="mx-auto max-w-[1000px] space-y-8" role="log" aria-live="polite" aria-relevant="additions text">
             {activeChat?.messages.map((msg) => (
+              msg.role === "assistant" && msg.content.trim() === "" ? null :
               <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                
                 {msg.role === "assistant" && (
-                  <div className="mr-4 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg mt-1">
+                  <div className="mr-4 mt-1 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg">
                     <Bot size={24} />
                   </div>
                 )}
@@ -244,84 +266,88 @@ const ChatPage = () => {
                 <div
                   className={`max-w-[80%] rounded-[24px] px-8 py-5 text-[16px] leading-relaxed shadow-md ${
                     msg.role === "user"
-                      ? "bg-blue-600 text-white rounded-br-sm"
-                      : "bg-white text-gray-800 border border-gray-100 rounded-bl-sm"
+                      ? "rounded-br-sm bg-primary text-primary-foreground"
+                      : "rounded-bl-sm border border-border bg-card text-card-foreground"
                   }`}
                 >
                   <div className="whitespace-pre-wrap">{msg.content}</div>
                 </div>
               </div>
             ))}
-            
-            {isLoading && (
-               <div className="flex justify-start">
-                  <div className="mr-4 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg">
-                    <Bot size={24} />
-                  </div>
-                  <div className="bg-white px-8 py-5 rounded-[24px] border border-gray-100 shadow-md flex items-center gap-2">
-                     <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce"></div>
-                     <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce delay-100"></div>
-                     <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce delay-200"></div>
-                  </div>
-               </div>
+
+            {isWaitingForFirstChunk && (
+              <div className="flex justify-start">
+                <div className="mr-4 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg">
+                  <Bot size={24} />
+                </div>
+                <div className="flex items-center gap-2 rounded-[24px] border border-border bg-card px-8 py-5 shadow-md">
+                  <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-primary"></div>
+                  <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-primary delay-100"></div>
+                  <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-primary delay-200"></div>
+                </div>
+              </div>
             )}
             <div ref={messagesEndRef} />
           </div>
         </div>
 
-        {/* Floating Input Area (UPDATED) */}
         <div className="absolute bottom-8 left-0 right-0 px-6">
-          <div className="max-w-[1000px] mx-auto">
+          <div className="mx-auto max-w-[1000px]">
             <form
               onSubmit={handleSend}
-              className="flex items-center gap-4 rounded-full border border-gray-200 bg-white p-2 shadow-2xl transition-all hover:shadow-xl focus-within:ring-2 focus-within:ring-blue-500/50"
+              className="flex items-center gap-4 rounded-full border border-border bg-card p-2 shadow-elevated transition-all focus-within:ring-2 focus-within:ring-ring"
             >
               <input
                 type="text"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about your documents..."
-                disabled={isLoading}
-                className="flex-1 bg-transparent px-6 py-4 text-base text-gray-800 placeholder:text-gray-400 outline-none"
+                onChange={(event) => setInput(event.target.value)}
+                placeholder={config.featureFlags.chatEnabled ? "Ask about your documents..." : "Chat temporarily disabled"}
+                disabled={isLoading || !config.featureFlags.chatEnabled || isOffline}
+                className="flex-1 bg-transparent px-6 py-4 text-base text-foreground placeholder:text-muted-foreground outline-none"
+                aria-label="Ask a question"
               />
-              <button 
-                type="submit" 
-                disabled={isLoading || !input.trim()}
-                className={`p-4 rounded-full text-white transition-all transform hover:scale-105 ${
-                  isLoading || !input.trim() 
-                    ? "bg-gray-300 cursor-not-allowed" 
-                    : "bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg"
+              <button
+                type="submit"
+                disabled={isLoading || !input.trim() || !config.featureFlags.chatEnabled || isOffline}
+                className={`rounded-full p-4 text-primary-foreground transition-all hover:scale-105 ${
+                  isLoading || !input.trim() || !config.featureFlags.chatEnabled || isOffline
+                    ? "cursor-not-allowed bg-muted"
+                    : "bg-gradient-to-r from-primary to-primary/80 shadow-lg"
                 }`}
               >
                 <Rocket size={24} className={isLoading ? "animate-pulse" : ""} />
               </button>
             </form>
-            <p className="text-center text-xs font-medium text-gray-400 mt-3 tracking-wide">
-              AcademeRAG AI can make mistakes. Please verify important information.
-            </p>
+            <p className="mt-3 text-center text-xs font-medium text-muted-foreground">AcademeRAG can make mistakes. Verify important information.</p>
           </div>
         </div>
+
+        {showDiagnostics && config.featureFlags.diagnosticsPanel && (
+          <div className="absolute right-6 top-20 z-30 max-h-[40vh] w-[420px] overflow-auto rounded-xl border border-border bg-card p-4 shadow-2xl">
+            <h3 className="mb-3 text-sm font-semibold">Client Diagnostics</h3>
+            <pre className="text-xs text-muted-foreground">{JSON.stringify(getTelemetryEvents().slice(-20), null, 2)}</pre>
+          </div>
+        )}
       </main>
 
-      {/* Confirmation Dialogs */}
       {showLogoutDialog && (
-         <ConfirmDialog
-            open={showLogoutDialog}
-            onClose={() => setShowLogoutDialog(false)}
-            onConfirm={handleLogout}
-            title="Sign Out"
-            description="Are you sure you want to sign out of your account?"
-         />
+        <ConfirmDialog
+          open={showLogoutDialog}
+          onClose={() => setShowLogoutDialog(false)}
+          onConfirm={handleLogout}
+          title="Sign Out"
+          description="Are you sure you want to sign out of your account?"
+        />
       )}
-      
+
       {deleteChatId && (
-         <ConfirmDialog
-            open={!!deleteChatId}
-            onClose={() => setDeleteChatId(null)}
-            onConfirm={handleDeleteChat}
-            title="Delete Chat"
-            description="This will permanently delete your conversation history."
-         />
+        <ConfirmDialog
+          open={Boolean(deleteChatId)}
+          onClose={() => setDeleteChatId(null)}
+          onConfirm={handleDeleteChat}
+          title="Delete Chat"
+          description="This will permanently delete your conversation history."
+        />
       )}
     </div>
   );

@@ -1,158 +1,230 @@
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+import { apiClient, ApiError } from "@/lib/api-client";
+import { authStorage } from "@/lib/auth";
+
+const signInSchema = z.object({
+  email: z.string().email("Provide a valid email"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+const signUpSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().email("Provide a valid email"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+type SignInValues = z.infer<typeof signInSchema>;
+type SignUpValues = z.infer<typeof signUpSchema>;
 
 const AuthPage = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [signInForm, setSignInForm] = useState({ email: "", password: "" });
-  const [signUpForm, setSignUpForm] = useState({ name: "", email: "", password: "" });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
+
+  const signInForm = useForm<SignInValues>({ resolver: zodResolver(signInSchema), mode: "onSubmit" });
+  const signUpForm = useForm<SignUpValues>({ resolver: zodResolver(signUpSchema), mode: "onSubmit" });
 
   useEffect(() => {
-    if (localStorage.getItem("rag_user")) {
+    if (authStorage.getUser() && authStorage.getTokens()?.access) {
       navigate("/chat");
     }
   }, [navigate]);
 
-  const handleSignIn = (e: React.FormEvent) => {
-    e.preventDefault();
-    if ((signInForm.email === "admin@mail.com" && signInForm.password === "12345") || signInForm.email.length > 0) {
-      localStorage.setItem("rag_user", JSON.stringify({ email: signInForm.email }));
+  const overlayCopy = useMemo(
+    () =>
+      isSignUp
+        ? {
+            title: "Hello!",
+            text: "Enter your personal details and start your journey with us.",
+            action: "Sign Up",
+            onClick: () => setIsSignUp(false),
+          }
+        : {
+            title: "Welcome Back!",
+            text: "To keep connected with us please login with your personal info.",
+            action: "Sign In",
+            onClick: () => setIsSignUp(true),
+          },
+    [isSignUp],
+  );
+
+  const handleSignIn = async (values: SignInValues) => {
+    setIsSubmitting(true);
+    try {
+      await apiClient.login(values.email, values.password);
       toast.success("Welcome back!");
       navigate("/chat");
-    } else {
-      toast.error("Invalid credentials");
+    } catch (error) {
+      const message = error instanceof ApiError ? `${error.message}${error.traceId ? ` (trace: ${error.traceId})` : ""}` : "Login failed";
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleSignUp = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (signUpForm.email && signUpForm.password) {
-      localStorage.setItem("rag_user", JSON.stringify({ email: signUpForm.email, name: signUpForm.name }));
+  const handleSignUp = async (values: SignUpValues) => {
+    setIsSubmitting(true);
+    try {
+      await apiClient.register(values.name, values.email, values.password);
       toast.success("Account created successfully!");
       navigate("/chat");
-    } else {
-      toast.error("Please fill in all fields");
+    } catch (error) {
+      const message = error instanceof ApiError ? `${error.message}${error.traceId ? ` (trace: ${error.traceId})` : ""}` : "Registration failed";
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 p-4 font-['Poppins']">
-      {/* Container: Large and Rounded */}
-      <div className="relative flex h-[750px] w-full max-w-[1200px] overflow-hidden rounded-[30px] bg-white shadow-2xl">
-        
-        {/* Sign In Form (Left Side) */}
-        <div className="flex w-1/2 flex-col items-center justify-center px-16 z-10">
-          <h2 className="mb-3 text-4xl font-bold text-gray-800">Sign in</h2>
-          <p className="mb-10 text-lg text-gray-500">Welcome back! Please enter your details.</p>
-          <form onSubmit={handleSignIn} className="w-full max-w-[400px] space-y-6">
-            <div className="relative">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4 font-sans">
+      <div className="relative flex h-[750px] w-full max-w-[1200px] overflow-hidden rounded-[var(--radius-2xl)] bg-card shadow-elevated">
+        <section aria-label="Sign in" className="z-10 flex w-1/2 flex-col items-center justify-center px-16">
+          <h1 className="mb-3 text-4xl font-bold text-foreground">Sign in</h1>
+          <p className="mb-10 text-lg text-muted-foreground">Welcome back! Please enter your details.</p>
+          <form onSubmit={signInForm.handleSubmit(handleSignIn)} className="w-full max-w-[400px] space-y-5" noValidate>
+            <div>
+              <label htmlFor="signin-email" className="mb-2 block text-sm font-medium text-foreground">
+                Email
+              </label>
               <input
+                id="signin-email"
                 type="email"
-                placeholder="Email"
-                value={signInForm.email}
-                onChange={(e) => setSignInForm({ ...signInForm, email: e.target.value })}
-                className="w-full rounded-xl bg-gray-50 px-6 py-4 text-base text-gray-800 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-blue-500 border border-gray-100"
+                {...signInForm.register("email")}
+                className="w-full rounded-xl border border-border bg-background px-6 py-4 text-base text-foreground outline-none focus:ring-2 focus:ring-ring"
               />
+              {signInForm.formState.errors.email && (
+                <p role="alert" className="mt-2 text-sm text-destructive">
+                  {signInForm.formState.errors.email.message}
+                </p>
+              )}
             </div>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Password"
-                value={signInForm.password}
-                onChange={(e) => setSignInForm({ ...signInForm, password: e.target.value })}
-                className="w-full rounded-xl bg-gray-50 px-6 py-4 text-base text-gray-800 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-blue-500 border border-gray-100"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
+            <div>
+              <label htmlFor="signin-password" className="mb-2 block text-sm font-medium text-foreground">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  id="signin-password"
+                  type={showPassword ? "text" : "password"}
+                  {...signInForm.register("password")}
+                  className="w-full rounded-xl border border-border bg-background px-6 py-4 text-base text-foreground outline-none focus:ring-2 focus:ring-ring"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="absolute right-5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+              {signInForm.formState.errors.password && (
+                <p role="alert" className="mt-2 text-sm text-destructive">
+                  {signInForm.formState.errors.password.message}
+                </p>
+              )}
             </div>
-            <div className="flex justify-center pt-4">
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-blue-600 px-10 py-4 text-base font-bold uppercase tracking-wider text-white transition-all hover:bg-blue-700 hover:shadow-lg hover:-translate-y-0.5"
-              >
-                Sign In
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full rounded-xl bg-primary px-10 py-4 text-base font-bold uppercase tracking-wider text-primary-foreground transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSubmitting ? "Signing In..." : "Sign In"}
+            </button>
           </form>
-        </div>
+        </section>
 
-        {/* Sign Up Form (Right Side) */}
-        <div className="absolute right-0 top-0 flex h-full w-1/2 flex-col items-center justify-center px-16 z-0">
-          <h2 className="mb-8 text-4xl font-bold text-gray-800">Create Account</h2>
-          <form onSubmit={handleSignUp} className="w-full max-w-[400px] space-y-5">
-            <input
-              type="text"
-              placeholder="Full Name"
-              value={signUpForm.name}
-              onChange={(e) => setSignUpForm({ ...signUpForm, name: e.target.value })}
-              className="w-full rounded-xl bg-gray-50 px-6 py-4 text-base text-gray-800 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-blue-500 border border-gray-100"
-            />
-            <input
-              type="email"
-              placeholder="Email"
-              value={signUpForm.email}
-              onChange={(e) => setSignUpForm({ ...signUpForm, email: e.target.value })}
-              className="w-full rounded-xl bg-gray-50 px-6 py-4 text-base text-gray-800 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-blue-500 border border-gray-100"
-            />
-            <div className="relative">
+        <section aria-label="Sign up" className="absolute right-0 top-0 z-0 flex h-full w-1/2 flex-col items-center justify-center px-16">
+          <h2 className="mb-8 text-4xl font-bold text-foreground">Create Account</h2>
+          <form onSubmit={signUpForm.handleSubmit(handleSignUp)} className="w-full max-w-[400px] space-y-5" noValidate>
+            <div>
+              <label htmlFor="signup-name" className="mb-2 block text-sm font-medium text-foreground">
+                Full Name
+              </label>
               <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Password"
-                value={signUpForm.password}
-                onChange={(e) => setSignUpForm({ ...signUpForm, password: e.target.value })}
-                className="w-full rounded-xl bg-gray-50 px-6 py-4 text-base text-gray-800 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-blue-500 border border-gray-100"
+                id="signup-name"
+                type="text"
+                {...signUpForm.register("name")}
+                className="w-full rounded-xl border border-border bg-background px-6 py-4 text-base text-foreground outline-none focus:ring-2 focus:ring-ring"
               />
+              {signUpForm.formState.errors.name && (
+                <p role="alert" className="mt-2 text-sm text-destructive">
+                  {signUpForm.formState.errors.name.message}
+                </p>
+              )}
             </div>
-            <div className="flex justify-center pt-4">
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-blue-600 px-10 py-4 text-base font-bold uppercase tracking-wider text-white transition-all hover:bg-blue-700 hover:shadow-lg hover:-translate-y-0.5"
-              >
-                Sign Up
-              </button>
+            <div>
+              <label htmlFor="signup-email" className="mb-2 block text-sm font-medium text-foreground">
+                Email
+              </label>
+              <input
+                id="signup-email"
+                type="email"
+                {...signUpForm.register("email")}
+                className="w-full rounded-xl border border-border bg-background px-6 py-4 text-base text-foreground outline-none focus:ring-2 focus:ring-ring"
+              />
+              {signUpForm.formState.errors.email && (
+                <p role="alert" className="mt-2 text-sm text-destructive">
+                  {signUpForm.formState.errors.email.message}
+                </p>
+              )}
             </div>
+            <div>
+              <label htmlFor="signup-password" className="mb-2 block text-sm font-medium text-foreground">
+                Password
+              </label>
+              <input
+                id="signup-password"
+                type={showPassword ? "text" : "password"}
+                {...signUpForm.register("password")}
+                className="w-full rounded-xl border border-border bg-background px-6 py-4 text-base text-foreground outline-none focus:ring-2 focus:ring-ring"
+              />
+              {signUpForm.formState.errors.password && (
+                <p role="alert" className="mt-2 text-sm text-destructive">
+                  {signUpForm.formState.errors.password.message}
+                </p>
+              )}
+            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full rounded-xl bg-primary px-10 py-4 text-base font-bold uppercase tracking-wider text-primary-foreground transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSubmitting ? "Creating..." : "Sign Up"}
+            </button>
           </form>
-        </div>
+        </section>
 
-        {/* Sliding Blue Overlay */}
         <motion.div
-          className="absolute top-0 left-0 h-full w-1/2 flex flex-col items-center justify-center text-white z-20"
-          style={{ background: "linear-gradient(135deg, #355CDE 0%, #1a2a6c 100%)" }}
-          animate={{ x: isSignUp ? "100%" : 0 }}
+          className="absolute left-0 top-0 z-20 flex h-full w-1/2 flex-col items-center justify-center text-primary-foreground"
+          style={{ background: "linear-gradient(135deg, hsl(var(--brand-start)) 0%, hsl(var(--brand-end)) 100%)" }}
+          animate={reduceMotion ? { x: 0 } : { x: isSignUp ? "100%" : 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
         >
-          {isSignUp ? (
-            <div className="flex flex-col items-center px-12 text-center">
-              <h2 className="mb-6 text-5xl font-bold">Hello!</h2>
-              <p className="mb-10 text-xl text-blue-100 leading-relaxed">Enter your personal details and start your journey with us.</p>
-              <button
-                onClick={() => setIsSignUp(false)}
-                className="rounded-full border-2 border-white px-12 py-3 text-sm font-bold uppercase tracking-wider transition-all hover:bg-white hover:text-blue-700"
-              >
-                Sign In
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center px-12 text-center">
-              <h2 className="mb-6 text-5xl font-bold">Welcome Back!</h2>
-              <p className="mb-10 text-xl text-blue-100 leading-relaxed">To keep connected with us please login with your personal info.</p>
-              <button
-                onClick={() => setIsSignUp(true)}
-                className="rounded-full border-2 border-white px-12 py-3 text-sm font-bold uppercase tracking-wider transition-all hover:bg-white hover:text-blue-700"
-              >
-                Sign Up
-              </button>
-            </div>
-          )}
+          <div className="flex flex-col items-center px-12 text-center">
+            <h2 className="mb-6 text-5xl font-bold">{overlayCopy.title}</h2>
+            <p className="mb-10 text-xl leading-relaxed text-primary-foreground/80">{overlayCopy.text}</p>
+            <button
+              onClick={overlayCopy.onClick}
+              onMouseEnter={() => {
+                import("./ChatPage");
+              }}
+              className="rounded-full border-2 border-primary-foreground px-12 py-3 text-sm font-bold uppercase tracking-wider transition-all hover:bg-primary-foreground hover:text-primary"
+            >
+              {overlayCopy.action}
+            </button>
+          </div>
         </motion.div>
       </div>
     </div>

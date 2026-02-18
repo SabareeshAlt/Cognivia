@@ -1,111 +1,224 @@
 import os
 from pathlib import Path
+from datetime import timedelta
+
 from dotenv import load_dotenv
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
-# Load .env from project root
-load_dotenv(BASE_DIR / '.env')
 
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-TEST-KEY-CHANGE-ME')
-DEBUG = True
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '*']
+def env_required(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        raise RuntimeError(f"Environment variable '{name}' is required")
+    return value.strip()
 
-# Logging — surface all errors, no silent failures
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '[{asctime}] {levelname} {name}: {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
-        },
-    },
-    'root': {
-        'handlers': ['console'],
-        'level': 'INFO',
-    },
-    'loggers': {
-        'api': {'handlers': ['console'], 'level': 'DEBUG', 'propagate': False},
-        'django': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
-    },
-}
+
+def env_bool(name: str) -> bool:
+    value = env_required(name).lower()
+    if value not in {"1", "true", "yes", "on", "0", "false", "no", "off"}:
+        raise RuntimeError(f"Environment variable '{name}' must be a boolean value")
+    return value in {"1", "true", "yes", "on"}
+
+
+def env_int(name: str) -> int:
+    value = env_required(name)
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise RuntimeError(f"Environment variable '{name}' must be an integer") from exc
+
+
+def env_list(name: str) -> list[str]:
+    items = [item.strip() for item in env_required(name).split(",") if item.strip()]
+    if not items:
+        raise RuntimeError(f"Environment variable '{name}' must contain at least one item")
+    return items
+
+
+DEBUG = env_bool("DJANGO_DEBUG")
+SECRET_KEY = env_required("DJANGO_SECRET_KEY")
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'corsheaders',  # Required
-    'api',          # Your App
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "corsheaders",
+    "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
+    "api",
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware', # Must be at the top
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "api.middleware.MetricsMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "api.middleware.RequestIDMiddleware",
 ]
 
-ROOT_URLCONF = 'rag_project.urls'
+ROOT_URLCONF = "rag_project.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'], # Points to root templates folder
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'rag_project.wsgi.application'
+WSGI_APPLICATION = "rag_project.wsgi.application"
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DB_ENGINE = env_required("DB_ENGINE").lower()
+if DB_ENGINE not in {"sqlite", "postgres"}:
+    raise RuntimeError("DB_ENGINE must be either 'sqlite' or 'postgres'")
+
+if DB_ENGINE == "postgres":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": env_required("POSTGRES_DB"),
+            "USER": env_required("POSTGRES_USER"),
+            "PASSWORD": env_required("POSTGRES_PASSWORD"),
+            "HOST": env_required("POSTGRES_HOST"),
+            "PORT": env_required("POSTGRES_PORT"),
+            "CONN_MAX_AGE": env_int("POSTGRES_CONN_MAX_AGE"),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
-STATIC_URL = 'static/'
-STATICFILES_DIRS = [BASE_DIR / 'static']
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+STATIC_URL = "static/"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 
-# CORS — allow all origins during development
-CORS_ALLOW_ALL_ORIGINS = True
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=env_int("JWT_ACCESS_MINUTES")),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=env_int("JWT_REFRESH_DAYS")),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS")
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS")
 CORS_ALLOW_CREDENTIALS = True
+if CORS_ALLOW_ALL_ORIGINS and CORS_ALLOW_CREDENTIALS:
+    raise RuntimeError("CORS_ALLOW_ALL_ORIGINS=true is not allowed with credentialed requests")
 CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-client-version",
+    "x-requested-with",
+    "x-request-id",
 ]
+
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT")
+SECURE_HSTS_SECONDS = env_int("SECURE_HSTS_SECONDS")
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
+X_FRAME_OPTIONS = "DENY"
+
+RATELIMIT_DEFAULT = env_required("RATELIMIT_DEFAULT")
+AUTH_REGISTER_RATELIMIT = env_required("AUTH_REGISTER_RATELIMIT")
+AUTH_LOGIN_RATELIMIT = env_required("AUTH_LOGIN_RATELIMIT")
+AUTH_REFRESH_RATELIMIT = env_required("AUTH_REFRESH_RATELIMIT")
+RATELIMIT_VIEW = "api.error_views.ratelimited_error"
+MAX_QUESTION_LENGTH = env_int("MAX_QUESTION_LENGTH")
+OLLAMA_HEALTHCHECK_URL = env_required("OLLAMA_HEALTHCHECK_URL")
+RAG_READY_TIMEOUT_MS = env_int("RAG_READY_TIMEOUT_MS")
+
+DJANGO_LOG_LEVEL = env_required("DJANGO_LOG_LEVEL")
+API_LOG_LEVEL = env_required("API_LOG_LEVEL")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "()": "api.logging_formatters.SafeRequestFormatter",
+            "format": "[{asctime}] {levelname} {name} request_id={request_id} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "filters": {
+        "request_context": {
+            "()": "api.logging_filters.RequestContextFilter",
+        }
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": DJANGO_LOG_LEVEL,
+        "filters": ["request_context"],
+    },
+    "loggers": {
+        "api": {
+            "handlers": ["console"],
+            "level": API_LOG_LEVEL,
+            "propagate": False,
+            "filters": ["request_context"],
+        },
+        "django": {
+            "handlers": ["console"],
+            "level": DJANGO_LOG_LEVEL,
+            "propagate": False,
+            "filters": ["request_context"],
+        },
+    },
+}

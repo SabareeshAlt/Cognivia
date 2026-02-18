@@ -1,5 +1,6 @@
 from django.apps import AppConfig
 import logging
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -11,22 +12,26 @@ class ApiConfig(AppConfig):
     def ready(self):
         """
         Called when Django starts up.
-        Warm up RAG components for faster first request.
+        Warm up active RAG components for faster first request.
         """
         import os
-        import sys
         
-        # Only run warmup in main process (not during migrations, etc.)
-        if os.environ.get('RUN_MAIN') == 'true' or 'runserver' not in sys.argv:
+        # Warmup is opt-in to keep tests/CI deterministic.
+        if os.environ.get("RAG_WARMUP_ON_STARTUP", "false").lower() != "true":
+            return
+
+        # Avoid duplicate warmups under autoreloader parent process.
+        if os.environ.get("RUN_MAIN") != "true":
+            return
+
+        def _warmup_active_stack():
             try:
-                # Add project root to path
-                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                if project_root not in sys.path:
-                    sys.path.insert(0, project_root)
-                
-                from optimized_rag import warmup
+                from Milvus import get_retriever
+
                 logger.info("Starting RAG warmup...")
-                warmup()
-                logger.info("✅ RAG components ready - optimized for fast responses")
-            except Exception as e:
-                logger.warning(f"RAG warmup failed (will initialize on first request): {e}")
+                get_retriever()
+                logger.info("RAG warmup completed.")
+            except Exception as exc:
+                logger.warning("RAG warmup failed (will initialize lazily): %s", exc)
+
+        threading.Thread(target=_warmup_active_stack, daemon=True).start()

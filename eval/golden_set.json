@@ -1,0 +1,20 @@
+[
+  {
+    "id": "q1",
+    "question": "What is retrieval-augmented generation?",
+    "reference_keywords": ["retrieval", "documents", "generation"],
+    "required_citation_markers": ["["]
+  },
+  {
+    "id": "q2",
+    "question": "Why is hybrid retrieval useful in enterprise RAG?",
+    "reference_keywords": ["bm25", "vector", "rerank"],
+    "required_citation_markers": ["["]
+  },
+  {
+    "id": "q3",
+    "question": "How can you reduce hallucinations in a RAG pipeline?",
+    "reference_keywords": ["grounding", "citation", "evaluation"],
+    "required_citation_markers": ["["]
+  }
+]

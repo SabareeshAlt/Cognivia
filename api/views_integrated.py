@@ -13,6 +13,12 @@ import os
 
 logger = logging.getLogger(__name__)
 
+def _required_env(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        raise RuntimeError(f"Environment variable '{name}' is required")
+    return value.strip()
+
 
 def _build_rag_answer(question: str, docs) -> str:
     """Build an answer using Ollama, grounded by retrieved docs."""
@@ -47,8 +53,8 @@ Final Answer:
     )
 
     llm = ChatOllama(
-        model=os.getenv("ACADEMERAG_LLM_MODEL", "llama3.2"),
-        temperature=float(os.getenv("ACADEMERAG_LLM_TEMPERATURE", "0.2")),
+        model=_required_env("ACADEMERAG_LLM_MODEL"),
+        temperature=float(_required_env("ACADEMERAG_LLM_TEMPERATURE")),
     )
 
     chain = prompt | llm
@@ -76,7 +82,7 @@ def ask_question(request):
         from vector import get_retriever
 
         try:
-            retriever = get_retriever(k=int(os.getenv("ACADEMERAG_TOP_K", "3")))
+            retriever = get_retriever(k=int(_required_env("ACADEMERAG_TOP_K")))
             docs = retriever.invoke(question)
         except Exception as e:
             logger.error(f"Vector retrieval failed: {e}")
@@ -148,7 +154,7 @@ def stream_answer(request):
 
                 from vector import get_retriever
 
-                retriever = get_retriever(k=int(os.getenv("ACADEMERAG_TOP_K", "3")))
+                retriever = get_retriever(k=int(_required_env("ACADEMERAG_TOP_K")))
                 docs = retriever.invoke(question)
 
                 yield f"data: {json.dumps({'status': 'retrieved', 'count': len(docs)})}\n\n"

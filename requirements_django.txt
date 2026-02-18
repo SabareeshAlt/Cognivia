@@ -1,7 +1,10 @@
 # Django Core (Compatible with Python 3.9)
 Django
 djangorestframework>=3.14.0
+djangorestframework-simplejwt>=5.3.1
 django-cors-headers>=4.3.0
+django-ratelimit>=4.1.0
+psycopg2-binary>=2.9.9
 
 # RAG and LLM
 langchain>=0.1.0

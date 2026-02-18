@@ -16,9 +16,27 @@ Including another URLconf
 """
 
 from django.contrib import admin
-from django.urls import path, include
+from django.http import JsonResponse
+from django.urls import include, path
+
+
+def root_index(_request):
+    return JsonResponse(
+        {
+            "service": "AcademeRAG API",
+            "status": "ok",
+            "routes": {
+                "admin": "/admin/",
+                "api": "/api/",
+                "health_live": "/api/health/live/",
+                "health_ready": "/api/health/ready/",
+            },
+            "note": "Frontend dev server usually runs on http://127.0.0.1:5173/",
+        }
+    )
 
 urlpatterns = [
+    path("", root_index, name="root_index"),
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),  # Routes /api/ requests to your api app
 ]

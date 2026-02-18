@@ -1,73 +1,34 @@
-# Welcome to your Lovable project
+# AcademeRAG Frontend
 
-## Project info
+Enterprise-focused React frontend for AcademeRAG (Vite + TypeScript + shadcn).
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Required Environment Variables
 
-## How can I edit this code?
+Create `Frontend/.env` from `Frontend/.env.example` and set:
 
-There are several ways of editing your application.
+- `VITE_API_BASE_URL`
+- `VITE_CHAT_DISABLED`
+- `VITE_CANARY_PERCENT`
+- `VITE_API_TIMEOUT_MS`
+- `VITE_MAX_JS_BUNDLE_KB`
+- `VITE_FEATURE_ENHANCED_STREAMING`
+- `VITE_FEATURE_DIAGNOSTICS_PANEL`
 
-**Use Lovable**
+## Scripts
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- `npm run dev`: start local dev server.
+- `npm run test`: run Vitest unit/a11y/resilience tests.
+- `npm run test:coverage`: run tests with coverage report.
+- `npm run build`: production build.
+- `npm run perf:budget`: enforce bundle-size budget from `VITE_MAX_JS_BUNDLE_KB`.
+- `npm run test:e2e`: run Playwright critical path + visual regression.
 
-Changes made via Lovable will be committed automatically to this repo.
+## Enterprise Frontend Controls Implemented
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- Typed API client with timeout/retry/error taxonomy.
+- Feature flags + deterministic canary targeting + kill switch.
+- Zustand workflow store for chat/session state.
+- Route-level lazy loading and suspense fallback.
+- Accessibility automation (`jest-axe`) and manual QA scripts in `Frontend/docs/`.
+- Performance budget enforcement and web-vitals telemetry hooks.
+- CSP/security headers in `Frontend/index.html` and `Frontend/public/_headers`.
