@@ -1,238 +1,335 @@
-# RAG System with Django Backend
+# AcademeRAG
 
-A complete RAG (Retrieval-Augmented Generation) system with a Django backend serving a modern frontend interface.
+Production-minded Retrieval-Augmented Generation (RAG) application with a Django API, React frontend, and Milvus (Zilliz Cloud) retrieval backend.
 
-## 🚀 Quick Start
+## What This Repository Implements
 
-### Prerequisites
+- Secure JWT auth flow: register, login, refresh, profile
+- Protected and rate-limited RAG endpoints
+- Milvus-based ingestion and retrieval pipeline in `Milvus.py`
+- Deterministic no-context fallback behavior
+- Readiness/liveness health probes
+- Full-stack local runner (`main.py`) with migration + process supervision
+- Frontend SPA (React + TypeScript + Vite) with typed API client, retry/timeout handling, and state management
+- CI workflows for backend/frontend validation and security supply-chain checks
+
+## High-Level Architecture
+
+- Backend: Django + DRF-style JSON API in `rag_project/` and `api/`
+- Retrieval: canonical implementation in `Milvus.py`
+- Vector DB: Milvus/Zilliz Cloud
+- LLM + embeddings: Ollama
+- Frontend: Vite + React + TypeScript in `Frontend/`
+- Local orchestration: `main.py` runs backend + frontend together
+
+## Repository Layout
+
+```text
+.
+├── api/
+│   ├── auth_views.py            # JWT auth endpoints
+│   ├── auth_utils.py            # JWT guard helpers
+│   ├── views.py                 # ask + health endpoints
+│   ├── models.py                # IndexedDocument tracking model
+│   └── urls.py                  # API route map
+├── rag_project/
+│   ├── settings.py              # fail-fast env config
+│   └── urls.py                  # root URL configuration
+├── Frontend/
+│   ├── src/lib/                 # config, api client, typed contracts
+│   ├── src/store/               # Zustand chat/auth state
+│   ├── src/pages/               # route-level pages
+│   └── package.json             # frontend scripts
+├── documents/                   # source PDFs for ingestion
+├── Milvus.py                    # canonical retrieval + ingestion lifecycle
+├── create_milvus_collection.py  # controlled ingestion/bootstrap entrypoint
+├── main.py                      # unified local launcher
+├── manage.py                    # Django CLI entrypoint
+├── requirements_django.txt      # backend dependencies
+└── .github/workflows/           # CI/CD pipelines
+```
+
+## Prerequisites
+
 - Python 3.9+
-- pip (Python package manager)
-- Ollama (for local LLM inference)
+- Node.js 18+
+- npm
+- Ollama running locally
+- Zilliz/Milvus cloud endpoint + token (for cloud mode)
 
-### Setup Instructions
+## 1) Setup
 
-1. **Navigate to the Project folder:**
-   ```bash
-   cd "/Users/apple/Applications/Visual Studio Code/Project"
-   ```
+### Backend setup
 
-2. **Create and activate virtual environment:**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On macOS/Linux
-   # or
-   venv\Scripts\activate  # On Windows
-   ```
-
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements_django.txt
-   ```
-
-4. **Run database migrations:**
-   ```bash
-   python manage.py migrate
-   ```
-
-5. **Start the development server:**
-   ```bash
-   python manage.py runserver 0.0.0.0:8000
-   ```
-
-6. **Access the application:**
-   Open your browser and visit: http://127.0.0.1:8000
-
-## 📁 Project Structure
-
-```
-Project/
-├── manage.py                    # Django management script
-├── requirements_django.txt      # Python dependencies
-├── db.sqlite3                   # SQLite database
-├── milvus_local.db             # Vector store database
-│
-├── rag_project/                 # Django settings
-│   ├── __init__.py
-│   ├── settings.py             # Django configuration
-│   ├── urls.py                 # URL routing
-│   └── wsgi.py
-│
-├── api/                         # Django REST API app
-│   ├── __init__.py
-│   ├── admin.py
-│   ├── models.py
-│   ├── views.py                # API endpoints
-│   └── urls.py                 # API URL routing
-│
-├── templates/                   # HTML templates
-│   └── index.html              # Main frontend (served at /)
-│
-├── static/                      # Static files
-│   └── js/
-│       └── rag-client.js       # JavaScript API client
-│
-├── rag_service.py              # RAG service implementation
-├── streaming_vector.py         # Vector store with streaming
-├── vector.py                   # Vector store operations
-└── Milvus.py                   # Milvus vector database
-```
-
-## 🔌 API Endpoints
-
-### POST `/api/ask/`
-Ask a question and get a RAG-powered response.
-
-**Request:**
-```json
-{
-    "question": "Your question here"
-}
-```
-
-**Response:**
-```json
-{
-    "answer": "Generated answer based on retrieved documents",
-    "sources": ["source1.pdf", "source2.pdf"],
-    "success": true
-}
-```
-
-### POST `/api/stream/`
-Get streaming responses (Server-Sent Events).
-
-**Request:**
-```json
-{
-    "question": "Your question here"
-}
-```
-
-**Response:** Server-Sent Events stream
-
-### GET `/api/health/`
-Check API health status.
-
-**Response:**
-```json
-{
-    "status": "healthy",
-    "rag_service": true,
-    "retriever": false
-}
-```
-
-### POST `/api/upload/`
-Upload documents for RAG processing.
-
-**Request:** multipart/form-data with file
-
-### GET `/api/documents/`
-List uploaded documents.
-
-## 🎨 Frontend Features
-
-- Modern, responsive UI
-- Real-time chat interface
-- Document upload capability
-- Source citation display
-- Streaming response support
-- Dark/light mode (if implemented)
-
-## ⚙️ Configuration
-
-### Django Settings (`rag_project/settings.py`)
-
-Key configurations:
-- `DEBUG`: Set to `False` in production
-- `ALLOWED_HOSTS`: Add your domain in production
-- `CORS_ALLOWED_ORIGINS`: Configure for cross-origin requests
-- `STATIC_URL`: Static files URL path
-- `TEMPLATES`: Template directory configuration
-
-### Environment Variables
-
-Create a `.env` file (optional):
-```
-DEBUG=True
-SECRET_KEY=your-secret-key
-OLLAMA_MODEL=llama3.2:latest
-```
-
-## 🧪 Testing
-
-### Test the API:
 ```bash
-# Health check
-curl http://127.0.0.1:8000/api/health/
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements_django.txt
+```
 
-# Ask a question
-curl -X POST http://127.0.0.1:8000/api/ask/ \
+### Frontend setup
+
+```bash
+cd Frontend
+npm install
+cd ..
+```
+
+### Environment files
+
+```bash
+cp .env.example .env
+cp Frontend/.env.example Frontend/.env
+```
+
+Then set required values in `.env`, especially:
+
+- `DJANGO_SECRET_KEY`
+- `ACADEMERAG_ENABLE_MILVUS_CLOUD=true`
+- `ACADEMERAG_MILVUS_URI`
+- `ACADEMERAG_MILVUS_TOKEN`
+- `OLLAMA_BASE_URL`
+- `OLLAMA_MODEL_NAME`
+- `EMBEDDING_MODEL`
+
+## 2) Database Migration
+
+```bash
+./.venv/bin/python manage.py migrate
+```
+
+## 3) Ingest Documents into Milvus
+
+Place PDFs in `documents/`.
+
+Recommended ingestion command:
+
+```bash
+./.venv/bin/python create_milvus_collection.py --recreate-safe
+```
+
+What `--recreate-safe` does:
+
+- Reuses collection if corpus/chunk profile is unchanged
+- Rebuilds collection only when changes are detected or tracking state is missing
+
+Other ingestion modes:
+
+```bash
+# Force drop + full rebuild
+./.venv/bin/python create_milvus_collection.py --recreate
+
+# Ensure schema only, skip document ingestion
+./.venv/bin/python create_milvus_collection.py --schema-only
+```
+
+## 4) Run the Application
+
+Recommended (backend + frontend together):
+
+```bash
+./.venv/bin/python main.py
+```
+
+Useful runner options:
+
+```bash
+# backend only
+./.venv/bin/python main.py --backend-only
+
+# frontend only
+./.venv/bin/python main.py --frontend-only
+
+# skip migrations on startup
+./.venv/bin/python main.py --skip-migrate
+```
+
+### Startup behavior notes
+
+- `main.py` now auto-resolves local port conflicts by selecting the next available port.
+- It prints final readiness URLs for backend and frontend after startup.
+
+## API Endpoints
+
+Base API prefix: `/api/`
+
+### Auth
+
+- `POST /api/auth/register/`
+- `POST /api/auth/login/`
+- `POST /api/auth/refresh/`
+- `GET /api/auth/me/` (requires `Authorization: Bearer <access_token>`)
+
+### Chat / RAG
+
+- `POST /api/ask/` (JWT required, rate-limited)
+- `POST /api/ask/stream/` (JWT required, SSE)
+
+Request body:
+
+```json
+{
+  "question": "Explain gradient descent"
+}
+```
+
+Optional stream flag on `/api/ask/`:
+
+```json
+{
+  "question": "Explain gradient descent",
+  "stream": true
+}
+```
+
+### Health
+
+- `GET /api/health/` (readiness alias)
+- `GET /api/health_check/` (readiness alias)
+- `GET /api/health/live/` (liveness)
+- `GET /api/health/ready/` (dependency-aware readiness)
+- `GET /api/metrics/` (Prometheus-style metrics)
+- `GET /api/admin/retrieval/diagnostics/` (admin-only retrieval diagnostics)
+
+## Quick API Test Commands
+
+### Register
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/auth/register/ \
   -H "Content-Type: application/json" \
-  -d '{"question": "What is machine learning?"}'
+  -d '{"email":"user@example.com","password":"password123","name":"User"}'
 ```
 
-### Run Django tests:
+### Login
+
 ```bash
-python manage.py test
+curl -s -X POST http://127.0.0.1:8000/api/auth/login/ \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"password123"}'
 ```
 
-## 🔧 Troubleshooting
+### Ask (replace `$TOKEN`)
 
-### Vector Store Not Initializing
-The error "milvus-lite is required" indicates Milvus Lite isn't installed. For local development without a full Milvus server:
 ```bash
-pip install "pymilvus[model]"
+curl -s -X POST http://127.0.0.1:8000/api/ask/ \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Summarize the indexed documents"}'
 ```
 
-### Ollama Not Running
-Ensure Ollama is installed and running:
+### Ready check
+
 ```bash
-# Start Ollama
+curl -s http://127.0.0.1:8000/api/health/ready/
+```
+
+## Testing and Validation
+
+Backend:
+
+```bash
+./.venv/bin/python manage.py check
+./.venv/bin/python manage.py test
+```
+
+Frontend:
+
+```bash
+cd Frontend
+npm run lint
+npm run test
+npm run build
+npm run perf:budget
+```
+
+E2E (for auth/chat UX changes):
+
+```bash
+cd Frontend
+npm run test:e2e
+```
+
+RAG eval gate:
+
+```bash
+./.venv/bin/python eval/rag_eval.py --mode mock --output eval/latest_report.json
+```
+
+## Command Cheat Sheet
+
+```bash
+# Setup
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements_django.txt
+cd Frontend && npm install && cd ..
+
+# Env templates
+cp .env.example .env
+cp Frontend/.env.example Frontend/.env
+
+# DB + ingest
+./.venv/bin/python manage.py migrate
+./.venv/bin/python create_milvus_collection.py --recreate-safe
+
+# Run
+./.venv/bin/python main.py
+
+# Health
+curl -s http://127.0.0.1:8000/api/health/live/
+curl -s http://127.0.0.1:8000/api/health/ready/
+
+# Backend tests
+./.venv/bin/python manage.py check
+./.venv/bin/python manage.py test
+
+# Frontend checks
+cd Frontend && npm run lint && npm run test && npm run build && npm run perf:budget
+```
+
+## Troubleshooting
+
+### Milvus connection failure
+
+- Verify cloud mode is enabled: `ACADEMERAG_ENABLE_MILVUS_CLOUD=true`
+- Verify `ACADEMERAG_MILVUS_URI` and `ACADEMERAG_MILVUS_TOKEN`
+- Re-run ingestion:
+
+```bash
+./.venv/bin/python create_milvus_collection.py --recreate-safe
+```
+
+### Ollama not reachable
+
+```bash
 ollama serve
-
-# Pull required model
-ollama pull llama3.2:latest
+ollama pull llama3.2
+ollama pull mxbai-embed-large
 ```
 
-### CORS Issues
-If accessing from a different domain, ensure CORS is configured in `settings.py`:
-```python
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-```
+### Readiness degraded
 
-### Static Files Not Loading
-Run collectstatic for production:
-```bash
-python manage.py collectstatic
-```
+- Check `GET /api/health/ready/` response fields (`ollama`, `vector_store`, `milvus_cloud`)
+- Inspect backend logs for request IDs and dependency errors
 
-## 📚 Documentation Files
+### Port conflict on startup
 
-- `README.md` - This file
-- `DJANGO_FRONTEND_INTEGRATION.md` - Integration guide
-- `TESTING_GUIDE.md` - Testing instructions
-- `SETUP_GUIDE.md` - Detailed setup guide
-- `STREAMING_IMPLEMENTATION_GUIDE.md` - Streaming implementation details
+- `main.py` automatically selects nearby free ports and prints the resolved URLs
+- If binding is blocked by OS permissions, run in a normal local shell session with network/socket access
 
-## 🚀 Production Deployment
+## Implementation Rules and Invariants
 
-1. Set `DEBUG=False` in settings
-2. Configure proper `SECRET_KEY`
-3. Set `ALLOWED_HOSTS`
-4. Run collectstatic
-5. Use gunicorn:
-   ```bash
-   gunicorn rag_project.wsgi:application --bind 0.0.0.0:8000
-   ```
+- Canonical retrieval path is `api/views.py` -> `Milvus.py`
+- Ask endpoints must remain authenticated and rate-limited
+- Traceability requires `X-Request-ID` propagation and structured logging
+- Env configuration remains strict and fail-fast in `rag_project/settings.py`
+- Ingestion must remain idempotent by content hash + chunk profile tracking
 
-## 📄 License
+## CI/CD
 
-This project is for educational and development purposes.
+Workflows in `.github/workflows/` include:
 
----
-
-**Server Status:** Running at http://127.0.0.1:8000
+- Backend checks and tests
+- Frontend lint/test/build/perf/e2e checks
+- RAG eval quality gate
+- Security and supply-chain scanning

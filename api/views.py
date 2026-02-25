@@ -183,11 +183,15 @@ def health_ready(request):
     if elapsed <= timeout_s:
         _refresh_vector_dependencies_async(min_interval_seconds=5.0)
         with _vector_ready_lock:
-            if _vector_ready_cache["ready"]:
+            cache_age = time.monotonic() - _vector_ready_cache["last_check"]
+            cache_fresh = cache_age <= 15.0
+            if cache_fresh and _vector_ready_cache["ready"]:
                 health_status["vector_store"] = True
                 health_status["milvus_cloud"] = True
             elif _vector_ready_cache["last_error"]:
                 logger.warning(f"Readiness check - vector store: {_vector_ready_cache['last_error']}")
+            elif not cache_fresh:
+                logger.warning("Readiness check - vector store status is stale, waiting for refresh.")
     else:
         logger.warning("Readiness check timed out before vector dependency checks.")
 

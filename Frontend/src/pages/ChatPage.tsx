@@ -130,7 +130,7 @@ const ChatPage = () => {
       updateMessage(
         activeChatId,
         botMsgId,
-        sanitizeText(`⚠️ ${apiError.message}\n\nCheck server availability at ${config.apiBaseUrl}.`),
+        sanitizeText(`⚠️ ${apiError.message}\n\nCheck server availability at ${apiClient.getActiveBaseUrl()}.`),
       );
 
       logTelemetry("chat.error", {

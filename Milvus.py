@@ -1,7 +1,9 @@
 import hashlib
 import logging
 import os
+import re
 import time
+from collections import Counter
 from functools import lru_cache
 from typing import Optional
 
@@ -450,18 +452,70 @@ def get_vector_store():
     return None
 
 
+def _tokenize(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", (text or "").lower())
+
+
+@lru_cache(maxsize=1)
+def _fallback_chunk_corpus() -> tuple[Document, ...]:
+    metadata = _collect_pdf_metadata()
+    if not metadata:
+        logger.warning("Fallback retrieval unavailable: no PDF documents found.")
+        return tuple()
+    docs = _load_and_chunk_files(metadata)
+    return tuple(docs)
+
+
+def _fallback_retrieve_docs(question: str, k: int) -> list[Document]:
+    corpus = _fallback_chunk_corpus()
+    if not corpus:
+        return []
+
+    query_tokens = _tokenize(question)
+    if not query_tokens:
+        return list(corpus[:k])
+    query_tf = Counter(query_tokens)
+
+    scored = []
+    for doc in corpus:
+        doc_tokens = _tokenize(doc.page_content)
+        if not doc_tokens:
+            continue
+        doc_tf = Counter(doc_tokens)
+        score = sum(min(freq, doc_tf[token]) for token, freq in query_tf.items())
+        if score > 0:
+            scored.append((score, doc))
+
+    if not scored:
+        return list(corpus[:k])
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [doc for _, doc in scored[:k]]
+
+
 def _retrieve_docs(question: str) -> list[Document]:
-    store = get_vector_store()
-    if not store:
-        raise ConnectionError("Vector Database unavailable.")
     k = _compute_dynamic_top_k(question)
     started = time.monotonic()
+
+    store = get_vector_store()
+    if not store:
+        fallback_docs = _fallback_retrieve_docs(question, k)
+        logger.warning(
+            "Vector store unavailable. Using local fallback retrieval with %s document(s).",
+            len(fallback_docs),
+        )
+        return fallback_docs
+
     docs = []
     try:
         scored = store.similarity_search_with_relevance_scores(question, k=k)
         docs = [doc for doc, score in scored if score >= RELEVANCE_SCORE_THRESHOLD]
-    except Exception:
-        docs = store.similarity_search(question, k=k)
+    except Exception as exc:
+        logger.warning("Milvus relevance search failed (%s); trying similarity fallback.", exc)
+        try:
+            docs = store.similarity_search(question, k=k)
+        except Exception as search_exc:
+            logger.error("Milvus similarity fallback failed: %s", search_exc)
+            docs = []
     logger.info(
         "Retrieval diagnostics: top_k=%s threshold=%.2f returned=%s latency_ms=%.1f",
         k,
@@ -469,7 +523,15 @@ def _retrieve_docs(question: str) -> list[Document]:
         len(docs),
         (time.monotonic() - started) * 1000.0,
     )
-    return docs if docs else []
+    if docs:
+        return docs
+
+    fallback_docs = _fallback_retrieve_docs(question, k)
+    logger.info(
+        "Milvus returned no results. Local fallback returned %s document(s).",
+        len(fallback_docs),
+    )
+    return fallback_docs
 
 
 def get_retrieval_diagnostics() -> dict:

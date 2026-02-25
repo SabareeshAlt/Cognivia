@@ -2,14 +2,14 @@
 
 Enterprise-focused React frontend for AcademeRAG (Vite + TypeScript + shadcn).
 
-## Required Environment Variables
+## Environment Variables
 
 Create `Frontend/.env` from `Frontend/.env.example` and set:
 
-- `VITE_API_BASE_URL`
+- `VITE_API_BASE_URL` (optional; defaults to dynamic runtime resolution)
 - `VITE_CHAT_DISABLED`
 - `VITE_CANARY_PERCENT`
-- `VITE_API_TIMEOUT_MS`
+- `VITE_API_TIMEOUT_MS` (optional; defaults to `30000`)
 - `VITE_MAX_JS_BUNDLE_KB`
 - `VITE_FEATURE_ENHANCED_STREAMING`
 - `VITE_FEATURE_DIAGNOSTICS_PANEL`
