@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 
 import { apiClient, ApiError } from "@/lib/api-client";
 import { authStorage } from "@/lib/auth";
+import { useChatStore } from "@/store/chat-store";
 
 const signInSchema = z.object({
   email: z.string().email("Provide a valid email"),
@@ -26,10 +27,12 @@ type SignUpValues = z.infer<typeof signUpSchema>;
 
 const AuthPage = () => {
   const [isSignUp, setIsSignUp] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [showSignInPassword, setShowSignInPassword] = useState(false);
+  const [showSignUpPassword, setShowSignUpPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
+  const resetChats = useChatStore((state) => state.reset);
 
   const signInForm = useForm<SignInValues>({ resolver: zodResolver(signInSchema), mode: "onSubmit" });
   const signUpForm = useForm<SignUpValues>({ resolver: zodResolver(signUpSchema), mode: "onSubmit" });
@@ -62,6 +65,7 @@ const AuthPage = () => {
     setIsSubmitting(true);
     try {
       await apiClient.login(values.email, values.password);
+      resetChats();
       toast.success("Welcome back!");
       navigate("/chat");
     } catch (error) {
@@ -116,17 +120,17 @@ const AuthPage = () => {
               <div className="relative">
                 <input
                   id="signin-password"
-                  type={showPassword ? "text" : "password"}
+                  type={showSignInPassword ? "text" : "password"}
                   {...signInForm.register("password")}
                   className="w-full rounded-xl border border-border bg-background px-6 py-4 text-base text-foreground outline-none focus:ring-2 focus:ring-ring"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword((current) => !current)}
+                  onClick={() => setShowSignInPassword((current) => !current)}
                   className="absolute right-5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-label={showSignInPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  {showSignInPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
               {signInForm.formState.errors.password && (
@@ -184,12 +188,22 @@ const AuthPage = () => {
               <label htmlFor="signup-password" className="mb-2 block text-sm font-medium text-foreground">
                 Password
               </label>
-              <input
-                id="signup-password"
-                type={showPassword ? "text" : "password"}
-                {...signUpForm.register("password")}
-                className="w-full rounded-xl border border-border bg-background px-6 py-4 text-base text-foreground outline-none focus:ring-2 focus:ring-ring"
-              />
+              <div className="relative">
+                <input
+                  id="signup-password"
+                  type={showSignUpPassword ? "text" : "password"}
+                  {...signUpForm.register("password")}
+                  className="w-full rounded-xl border border-border bg-background px-6 py-4 text-base text-foreground outline-none focus:ring-2 focus:ring-ring"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSignUpPassword((current) => !current)}
+                  className="absolute right-5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showSignUpPassword ? "Hide password" : "Show password"}
+                >
+                  {showSignUpPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
               {signUpForm.formState.errors.password && (
                 <p role="alert" className="mt-2 text-sm text-destructive">
                   {signUpForm.formState.errors.password.message}
