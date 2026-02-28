@@ -79,9 +79,6 @@ jobs:
       VITE_MAX_JS_BUNDLE_KB: "600"
       VITE_FEATURE_ENHANCED_STREAMING: "true"
       VITE_FEATURE_DIAGNOSTICS_PANEL: "false"
-    defaults:
-      run:
-        working-directory: Frontend
     steps:
       - uses: actions/checkout@v4
 
@@ -93,31 +90,40 @@ jobs:
           cache-dependency-path: Frontend/package-lock.json
 
       - name: Install dependencies
+        working-directory: Frontend
         run: npm ci
 
       - name: Lint
+        working-directory: Frontend
         run: npm run lint
 
       - name: Test
+        working-directory: Frontend
         run: npm run test
 
       - name: Test Coverage
+        working-directory: Frontend
         run: npm run test:coverage
 
       - name: Enforce frontend coverage threshold
+        working-directory: Frontend
         run: |
           node -e "const fs=require('fs');const s=JSON.parse(fs.readFileSync('coverage/coverage-summary.json','utf8'));const p=s.total.lines.pct; if(p<70){console.error('Frontend line coverage below threshold:',p);process.exit(1)}; console.log('Frontend line coverage:',p)"
 
       - name: Build
+        working-directory: Frontend
         run: npm run build
 
       - name: Bundle Budget
+        working-directory: Frontend
         run: npm run perf:budget
 
       - name: Install Playwright Browser
+        working-directory: Frontend
         run: npx playwright install --with-deps chromium
 
       - name: E2E
+        working-directory: Frontend
         run: npm run test:e2e
 
       - name: Upload Frontend Coverage
