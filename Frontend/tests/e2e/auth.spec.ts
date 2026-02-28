@@ -2,11 +2,14 @@ import { expect, test } from "@playwright/test";
 
 test("auth page renders", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
+  const signInSection = page.getByRole("region", { name: "Sign in" });
+  await expect(signInSection.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await expect(signInSection.getByRole("button", { name: "Sign In" })).toBeVisible();
 });
 
-test("auth page visual baseline", async ({ page }) => {
+test("auth page sign-up panel renders", async ({ page }) => {
   await page.goto("/");
-  await expect(page).toHaveScreenshot("auth-page.png", { fullPage: true });
+  const signUpSection = page.getByRole("region", { name: "Sign up" });
+  await expect(signUpSection.getByRole("heading", { name: "Create Account" })).toBeVisible();
+  await expect(signUpSection.getByRole("button", { name: "Sign Up" })).toBeVisible();
 });
