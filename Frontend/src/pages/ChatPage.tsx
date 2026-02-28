@@ -318,7 +318,6 @@ const ChatPage = () => {
                 <Rocket size={24} className={isLoading ? "animate-pulse" : ""} />
               </button>
             </form>
-            <p className="mt-3 text-center text-xs font-medium text-muted-foreground">AcademeRAG can make mistakes. Verify important information.</p>
           </div>
         </div>
 
