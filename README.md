@@ -1,335 +1,150 @@
-# AcademeRAG
-
-Production-minded Retrieval-Augmented Generation (RAG) application with a Django API, React frontend, and Milvus (Zilliz Cloud) retrieval backend.
-
-## What This Repository Implements
-
-- Secure JWT auth flow: register, login, refresh, profile
-- Protected and rate-limited RAG endpoints
-- Milvus-based ingestion and retrieval pipeline in `Milvus.py`
-- Deterministic no-context fallback behavior
-- Readiness/liveness health probes
-- Full-stack local runner (`main.py`) with migration + process supervision
-- Frontend SPA (React + TypeScript + Vite) with typed API client, retry/timeout handling, and state management
-- CI workflows for backend/frontend validation and security supply-chain checks
-
-## High-Level Architecture
-
-- Backend: Django + DRF-style JSON API in `rag_project/` and `api/`
-- Retrieval: canonical implementation in `Milvus.py`
-- Vector DB: Milvus/Zilliz Cloud
-- LLM + embeddings: Ollama
-- Frontend: Vite + React + TypeScript in `Frontend/`
-- Local orchestration: `main.py` runs backend + frontend together
-
-## Repository Layout
-
-```text
-.
-├── api/
-│   ├── auth_views.py            # JWT auth endpoints
-│   ├── auth_utils.py            # JWT guard helpers
-│   ├── views.py                 # ask + health endpoints
-│   ├── models.py                # IndexedDocument tracking model
-│   └── urls.py                  # API route map
-├── rag_project/
-│   ├── settings.py              # fail-fast env config
-│   └── urls.py                  # root URL configuration
-├── Frontend/
-│   ├── src/lib/                 # config, api client, typed contracts
-│   ├── src/store/               # Zustand chat/auth state
-│   ├── src/pages/               # route-level pages
-│   └── package.json             # frontend scripts
-├── documents/                   # source PDFs for ingestion
-├── Milvus.py                    # canonical retrieval + ingestion lifecycle
-├── create_milvus_collection.py  # controlled ingestion/bootstrap entrypoint
-├── main.py                      # unified local launcher
-├── manage.py                    # Django CLI entrypoint
-├── requirements_django.txt      # backend dependencies
-└── .github/workflows/           # CI/CD pipelines
-```
+# AcademeRAG-Final
+
+## Project Summary
+AcademeRAG-Final is a full-stack Retrieval-Augmented Generation system with:
+
+- A Django backend API for authentication, chat, health, and diagnostics
+- A React/Vite frontend for auth and chat UX
+- A Milvus (Zilliz Cloud) vector retrieval pipeline for document-grounded responses
+- Ollama-based embedding and generation integration
+- CI and security workflows enforcing quality and supply-chain controls
+
+This README documents the implemented system behavior and workflow, not sample usage.
+
+## Implemented Architecture
+
+### Backend Application Layer
+- Django project configuration: `rag_project/settings.py`, `rag_project/urls.py`
+- API module: `api/`
+  - `auth_views.py`: register/login/refresh/me JWT flow
+  - `auth_utils.py`: JWT verification helpers
+  - `views.py`: ask endpoints (sync + streaming), health endpoints, metrics, admin diagnostics
+  - `middleware.py`: request-id and metrics middleware
+  - `rate_limit.py`: IP-based rate limiting hooks
+  - `logging_*`: structured request-safe logging format and filters
+
+### Retrieval Layer
+- Canonical retrieval implementation: `Milvus.py`
+  - Cloud credential validation
+  - Embedding model wiring
+  - Vector store initialization and readiness tracking
+  - Streaming and non-streaming response paths
+  - Retrieval diagnostics and fallback behavior
+- Ingestion bootstrap: `create_milvus_collection.py`
+
+### Frontend Layer
+- Frontend app root: `Frontend/`
+- Core implementation:
+  - `src/pages/AuthPage.tsx`, `src/pages/ChatPage.tsx`
+  - `src/lib/api-client.ts`, `src/lib/auth.ts`, `src/lib/config.ts`, `src/lib/feature-flags.ts`
+  - `src/store/chat-store.ts`
+- E2E and unit tests:
+  - `tests/e2e/auth.spec.ts`
+  - `src/**/__tests__/*`
+
+## Data and Storage Model
+
+AcademeRAG uses two storage systems with different responsibilities:
+
+- Milvus/Zilliz Cloud (vector database):
+  - Stores document embeddings and vector index
+  - Used by retrieval pipeline in `Milvus.py`
+- Django relational database (`DB_ENGINE=sqlite|postgres`):
+  - Stores application state (users/auth and Django models)
+  - Configured in `rag_project/settings.py`
+
+This split is intentional: vector retrieval and app relational persistence are separate concerns.
+
+## Implemented Runtime Workflow
+
+### 1) Startup and Configuration
+- Environment is loaded from `.env` and validated with fail-fast checks in `rag_project/settings.py`.
+- Missing required keys raise startup errors immediately.
+- `main.py` orchestrates backend + frontend startup, migration execution, health wait, and port conflict resolution.
+
+### 2) Document Ingestion Workflow
+- Source PDFs are read from `documents/`.
+- `create_milvus_collection.py --recreate-safe` performs controlled ingestion:
+  - Reuses existing collection when corpus/chunk profile matches
+  - Rebuilds when source profile changes or state is absent
+- Milvus cloud mode requires valid non-placeholder token and `https://` URI.
+
+### 3) Query Workflow
+- Authenticated client submits question to `/api/ask/` or `/api/ask/stream/`.
+- Backend request pipeline:
+  - JWT auth check
+  - Rate-limit enforcement
+  - Retrieval pipeline invocation through `Milvus.py`
+  - Structured response with trace context
+- Health workflow:
+  - Liveness: process is up
+  - Readiness: dependency-aware status (Django/Ollama/vector readiness cache)
+
+## Security Implementation
+
+Implemented controls include:
+
+- JWT-based auth endpoints with token rotation path
+- Per-endpoint rate limiting for auth and chat paths
+- Strict environment-driven secrets/config (no hardcoded runtime secrets)
+- CORS/CSRF controls driven by explicit origin lists
+- Structured request logging with request IDs
+- CI secret scanning and dependency auditing pipeline
+
+## CI/CD Implementation
+
+### CI Workflow (`.github/workflows/ci.yml`)
+Implemented gates:
+
+- Backend:
+  - `python manage.py check`
+  - `coverage run manage.py test`
+  - `coverage report --fail-under=70`
+- Frontend:
+  - `npm run lint`
+  - `npm run test`
+  - `npm run test:coverage`
+  - coverage threshold check from `coverage-summary.json`
+  - `npm run build`
+  - `npm run perf:budget` (uses `VITE_MAX_JS_BUNDLE_KB`)
+  - `npm run test:e2e`
+- Eval gate:
+  - `python eval/rag_eval.py --mode mock --output eval/latest_report.json`
+
+### Security Workflow (`.github/workflows/security-supply-chain.yml`)
+Implemented gates:
+
+- Gitleaks secret scan
+- Backend: `pip-audit`, `bandit`, CycloneDX SBOM generation
+- Frontend: `npm audit --audit-level=high`, CycloneDX SBOM generation
+
+## Key Project Files
+
+- Backend settings and routing:
+  - `rag_project/settings.py`
+  - `rag_project/urls.py`
+- API implementation:
+  - `api/views.py`
+  - `api/auth_views.py`
+  - `api/auth_utils.py`
+  - `api/middleware.py`
+- Retrieval implementation:
+  - `Milvus.py`
+  - `create_milvus_collection.py`
+- Full-stack launcher:
+  - `main.py`
+- Frontend implementation:
+  - `Frontend/src/pages/AuthPage.tsx`
+  - `Frontend/src/pages/ChatPage.tsx`
+  - `Frontend/src/lib/api-client.ts`
+  - `Frontend/src/store/chat-store.ts`
+- CI and security pipelines:
+  - `.github/workflows/ci.yml`
+  - `.github/workflows/security-supply-chain.yml`
+
+## Operational Notes
+
+- `.env` and `Frontend/.env` are intentionally git-ignored.
+- `Frontend/tests/e2e/auth.spec.ts` is deterministic and does not depend on missing baseline snapshots in CI.
+- Bundle budget threshold is controlled via `VITE_MAX_JS_BUNDLE_KB` (CI uses `600`).
 
-## Prerequisites
-
-- Python 3.9+
-- Node.js 18+
-- npm
-- Ollama running locally
-- Zilliz/Milvus cloud endpoint + token (for cloud mode)
-
-## 1) Setup
-
-### Backend setup
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements_django.txt
-```
-
-### Frontend setup
-
-```bash
-cd Frontend
-npm install
-cd ..
-```
-
-### Environment files
-
-```bash
-cp .env.example .env
-cp Frontend/.env.example Frontend/.env
-```
-
-Then set required values in `.env`, especially:
-
-- `DJANGO_SECRET_KEY`
-- `ACADEMERAG_ENABLE_MILVUS_CLOUD=true`
-- `ACADEMERAG_MILVUS_URI`
-- `ACADEMERAG_MILVUS_TOKEN`
-- `OLLAMA_BASE_URL`
-- `OLLAMA_MODEL_NAME`
-- `EMBEDDING_MODEL`
-
-## 2) Database Migration
-
-```bash
-./.venv/bin/python manage.py migrate
-```
-
-## 3) Ingest Documents into Milvus
-
-Place PDFs in `documents/`.
-
-Recommended ingestion command:
-
-```bash
-./.venv/bin/python create_milvus_collection.py --recreate-safe
-```
-
-What `--recreate-safe` does:
-
-- Reuses collection if corpus/chunk profile is unchanged
-- Rebuilds collection only when changes are detected or tracking state is missing
-
-Other ingestion modes:
-
-```bash
-# Force drop + full rebuild
-./.venv/bin/python create_milvus_collection.py --recreate
-
-# Ensure schema only, skip document ingestion
-./.venv/bin/python create_milvus_collection.py --schema-only
-```
-
-## 4) Run the Application
-
-Recommended (backend + frontend together):
-
-```bash
-./.venv/bin/python main.py
-```
-
-Useful runner options:
-
-```bash
-# backend only
-./.venv/bin/python main.py --backend-only
-
-# frontend only
-./.venv/bin/python main.py --frontend-only
-
-# skip migrations on startup
-./.venv/bin/python main.py --skip-migrate
-```
-
-### Startup behavior notes
-
-- `main.py` now auto-resolves local port conflicts by selecting the next available port.
-- It prints final readiness URLs for backend and frontend after startup.
-
-## API Endpoints
-
-Base API prefix: `/api/`
-
-### Auth
-
-- `POST /api/auth/register/`
-- `POST /api/auth/login/`
-- `POST /api/auth/refresh/`
-- `GET /api/auth/me/` (requires `Authorization: Bearer <access_token>`)
-
-### Chat / RAG
-
-- `POST /api/ask/` (JWT required, rate-limited)
-- `POST /api/ask/stream/` (JWT required, SSE)
-
-Request body:
-
-```json
-{
-  "question": "Explain gradient descent"
-}
-```
-
-Optional stream flag on `/api/ask/`:
-
-```json
-{
-  "question": "Explain gradient descent",
-  "stream": true
-}
-```
-
-### Health
-
-- `GET /api/health/` (readiness alias)
-- `GET /api/health_check/` (readiness alias)
-- `GET /api/health/live/` (liveness)
-- `GET /api/health/ready/` (dependency-aware readiness)
-- `GET /api/metrics/` (Prometheus-style metrics)
-- `GET /api/admin/retrieval/diagnostics/` (admin-only retrieval diagnostics)
-
-## Quick API Test Commands
-
-### Register
-
-```bash
-curl -s -X POST http://127.0.0.1:8000/api/auth/register/ \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password123","name":"User"}'
-```
-
-### Login
-
-```bash
-curl -s -X POST http://127.0.0.1:8000/api/auth/login/ \
-  -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password123"}'
-```
-
-### Ask (replace `$TOKEN`)
-
-```bash
-curl -s -X POST http://127.0.0.1:8000/api/ask/ \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"question":"Summarize the indexed documents"}'
-```
-
-### Ready check
-
-```bash
-curl -s http://127.0.0.1:8000/api/health/ready/
-```
-
-## Testing and Validation
-
-Backend:
-
-```bash
-./.venv/bin/python manage.py check
-./.venv/bin/python manage.py test
-```
-
-Frontend:
-
-```bash
-cd Frontend
-npm run lint
-npm run test
-npm run build
-npm run perf:budget
-```
-
-E2E (for auth/chat UX changes):
-
-```bash
-cd Frontend
-npm run test:e2e
-```
-
-RAG eval gate:
-
-```bash
-./.venv/bin/python eval/rag_eval.py --mode mock --output eval/latest_report.json
-```
-
-## Command Cheat Sheet
-
-```bash
-# Setup
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements_django.txt
-cd Frontend && npm install && cd ..
-
-# Env templates
-cp .env.example .env
-cp Frontend/.env.example Frontend/.env
-
-# DB + ingest
-./.venv/bin/python manage.py migrate
-./.venv/bin/python create_milvus_collection.py --recreate-safe
-
-# Run
-./.venv/bin/python main.py
-
-# Health
-curl -s http://127.0.0.1:8000/api/health/live/
-curl -s http://127.0.0.1:8000/api/health/ready/
-
-# Backend tests
-./.venv/bin/python manage.py check
-./.venv/bin/python manage.py test
-
-# Frontend checks
-cd Frontend && npm run lint && npm run test && npm run build && npm run perf:budget
-```
-
-## Troubleshooting
-
-### Milvus connection failure
-
-- Verify cloud mode is enabled: `ACADEMERAG_ENABLE_MILVUS_CLOUD=true`
-- Verify `ACADEMERAG_MILVUS_URI` and `ACADEMERAG_MILVUS_TOKEN`
-- Re-run ingestion:
-
-```bash
-./.venv/bin/python create_milvus_collection.py --recreate-safe
-```
-
-### Ollama not reachable
-
-```bash
-ollama serve
-ollama pull llama3.2
-ollama pull mxbai-embed-large
-```
-
-### Readiness degraded
-
-- Check `GET /api/health/ready/` response fields (`ollama`, `vector_store`, `milvus_cloud`)
-- Inspect backend logs for request IDs and dependency errors
-
-### Port conflict on startup
-
-- `main.py` automatically selects nearby free ports and prints the resolved URLs
-- If binding is blocked by OS permissions, run in a normal local shell session with network/socket access
-
-## Implementation Rules and Invariants
-
-- Canonical retrieval path is `api/views.py` -> `Milvus.py`
-- Ask endpoints must remain authenticated and rate-limited
-- Traceability requires `X-Request-ID` propagation and structured logging
-- Env configuration remains strict and fail-fast in `rag_project/settings.py`
-- Ingestion must remain idempotent by content hash + chunk profile tracking
-
-## CI/CD
-
-Workflows in `.github/workflows/` include:
-
-- Backend checks and tests
-- Frontend lint/test/build/perf/e2e checks
-- RAG eval quality gate
-- Security and supply-chain scanning
