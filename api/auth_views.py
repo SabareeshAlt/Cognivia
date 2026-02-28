@@ -1,4 +1,5 @@
 import json
+import logging
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
@@ -17,6 +18,7 @@ from .rate_limit import ratelimit
 from .responses import json_error
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 def _issue_tokens(user):
@@ -121,8 +123,8 @@ def refresh(request):
         # Rotate-safe behavior: invalidate old refresh when blacklist app is enabled.
         try:
             refresh_obj.blacklist()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Refresh token blacklist skipped: %s", exc)
         return JsonResponse(
             {
                 "success": True,

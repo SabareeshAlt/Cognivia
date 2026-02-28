@@ -176,8 +176,8 @@ def health_ready(request):
         resp = http_requests.get(health_url, timeout=2)
         if resp.status_code == 200:
             health_status["ollama"] = True
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Ollama health probe failed: %s", exc)
 
     elapsed = time.monotonic() - started
     if elapsed <= timeout_s:
