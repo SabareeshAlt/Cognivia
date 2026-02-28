@@ -10,7 +10,15 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     coverage: {
-      reporter: ["text", "html"],
+      reporter: ["text", "html", "json-summary"],
+      include: [
+        "src/lib/**/*.{ts,tsx}",
+        "src/store/**/*.{ts,tsx}",
+        "src/pages/AuthPage.tsx",
+      ],
+      exclude: [
+        "src/lib/**/__tests__/**",
+      ],
       lines: 70,
       functions: 70,
       branches: 60,
