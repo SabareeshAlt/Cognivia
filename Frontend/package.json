@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "perf:budget": "node --env-file=.env scripts/check-bundle-budget.mjs"
+    "perf:budget": "node scripts/check-bundle-budget.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

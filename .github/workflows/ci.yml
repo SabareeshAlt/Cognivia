@@ -46,6 +46,7 @@ jobs:
       CHUNK_SIZE: "1000"
       CHUNK_OVERLAP: "200"
       ACADEMERAG_TOP_K: "3"
+      RAG_READY_TIMEOUT_MS: "15000"
     steps:
       - uses: actions/checkout@v4
 
