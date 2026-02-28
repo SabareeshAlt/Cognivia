@@ -1,0 +1,41 @@
+{
+  "summary": {
+    "mode": "mock",
+    "cases": 3,
+    "avg_keyword_hit_rate": 1.0,
+    "citation_rate": 1.0,
+    "pass_rate": 1.0,
+    "thresholds": {
+      "min_keyword_hit_rate": 0.6,
+      "min_citation_rate": 0.66,
+      "min_pass_rate": 0.66
+    },
+    "meets_thresholds": true
+  },
+  "results": [
+    {
+      "id": "q1",
+      "question": "What is retrieval-augmented generation?",
+      "answer": "RAG combines retrieval of relevant documents with generation grounded in those documents [doc-1].",
+      "keyword_hit_rate": 1.0,
+      "has_citation": true,
+      "passed": true
+    },
+    {
+      "id": "q2",
+      "question": "Why is hybrid retrieval useful in enterprise RAG?",
+      "answer": "Hybrid retrieval combines BM25 keyword search with vector similarity and reranking for precision [doc-2].",
+      "keyword_hit_rate": 1.0,
+      "has_citation": true,
+      "passed": true
+    },
+    {
+      "id": "q3",
+      "question": "How can you reduce hallucinations in a RAG pipeline?",
+      "answer": "Reduce hallucinations through grounding, citation enforcement, and continuous evaluation gates [doc-3].",
+      "keyword_hit_rate": 1.0,
+      "has_citation": true,
+      "passed": true
+    }
+  ]
+}

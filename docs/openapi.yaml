@@ -1,0 +1,23 @@
+openapi: 3.0.3
+info:
+  title: AcademeRAG API
+  version: 1.0.0
+paths:
+  /api/auth/login/:
+    post:
+      summary: Login
+      responses:
+        '200':
+          description: OK
+  /api/ask/:
+    post:
+      summary: Ask question
+      responses:
+        '200':
+          description: OK
+  /api/health/ready/:
+    get:
+      summary: Readiness probe
+      responses:
+        '200':
+          description: OK

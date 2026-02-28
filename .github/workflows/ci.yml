@@ -1,0 +1,152 @@
+name: CI
+
+on:
+  push:
+    branches: ["master", "main"]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      DJANGO_SECRET_KEY: test-secret-key-with-at-least-thirty-two-characters
+      DJANGO_DEBUG: "true"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      DJANGO_LOG_LEVEL: INFO
+      API_LOG_LEVEL: INFO
+      RAG_WARMUP_ON_STARTUP: "false"
+      CORS_ALLOW_ALL_ORIGINS: "false"
+      CORS_ALLOWED_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+      CSRF_TRUSTED_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+      SECURE_SSL_REDIRECT: "false"
+      SECURE_HSTS_SECONDS: "0"
+      JWT_ACCESS_MINUTES: "30"
+      JWT_REFRESH_DAYS: "7"
+      RATELIMIT_DEFAULT: 30/m
+      AUTH_REGISTER_RATELIMIT: 10/m
+      AUTH_LOGIN_RATELIMIT: 15/m
+      AUTH_REFRESH_RATELIMIT: 20/m
+      MAX_QUESTION_LENGTH: "1500"
+      DB_ENGINE: sqlite
+      POSTGRES_DB: academerag
+      POSTGRES_USER: academerag
+      POSTGRES_PASSWORD: academerag
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_CONN_MAX_AGE: "60"
+      ACADEMERAG_MILVUS_URI: https://example.api.zillizcloud.com
+      ACADEMERAG_MILVUS_TOKEN: test-token
+      COLLECTION_NAME: AcademeRAG
+      OLLAMA_MODEL_NAME: llama3.2
+      OLLAMA_BASE_URL: http://localhost:11434
+      OLLAMA_HEALTHCHECK_URL: http://localhost:11434
+      ACADEMERAG_LLM_MODEL: llama3.2
+      ACADEMERAG_LLM_TEMPERATURE: "0.7"
+      EMBEDDING_MODEL: mxbai-embed-large
+      CHUNK_SIZE: "1000"
+      CHUNK_OVERLAP: "200"
+      ACADEMERAG_TOP_K: "3"
+      RAG_READY_TIMEOUT_MS: "15000"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements_django.txt
+          pip install coverage
+
+      - name: Django system checks
+        run: python manage.py check
+
+      - name: Run Django tests with coverage gate
+        run: |
+          coverage run manage.py test
+          coverage report --fail-under=70
+
+  frontend:
+    runs-on: ubuntu-latest
+    env:
+      VITE_API_BASE_URL: http://127.0.0.1:8000
+      VITE_CHAT_DISABLED: "false"
+      VITE_CANARY_PERCENT: "100"
+      VITE_API_TIMEOUT_MS: "10000"
+      VITE_MAX_JS_BUNDLE_KB: "600"
+      VITE_FEATURE_ENHANCED_STREAMING: "true"
+      VITE_FEATURE_DIAGNOSTICS_PANEL: "false"
+    defaults:
+      run:
+        working-directory: Frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: Frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Test Coverage
+        run: npm run test:coverage
+
+      - name: Enforce frontend coverage threshold
+        run: |
+          node -e "const fs=require('fs');const s=JSON.parse(fs.readFileSync('coverage/coverage-summary.json','utf8'));const p=s.total.lines.pct; if(p<70){console.error('Frontend line coverage below threshold:',p);process.exit(1)}; console.log('Frontend line coverage:',p)"
+
+      - name: Build
+        run: npm run build
+
+      - name: Bundle Budget
+        run: npm run perf:budget
+
+      - name: Install Playwright Browser
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E
+        run: npm run test:e2e
+
+      - name: Upload Frontend Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: Frontend/coverage
+
+  rag-eval-gate:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install eval dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Run RAG eval regression gate
+        run: python eval/rag_eval.py --mode mock --output eval/latest_report.json
+
+      - name: Upload eval report
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-eval-report
+          path: eval/latest_report.json

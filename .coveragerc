@@ -1,0 +1,17 @@
+[run]
+source =
+    api
+    rag_project
+omit =
+    */migrations/*
+    api/tests.py
+    api/test_*.py
+    api/settings.py
+    api/views_integrated.py
+    api/optimized_rag.py
+    api/error_views.py
+    rag_project/asgi.py
+    rag_project/wsgi.py
+
+[report]
+show_missing = True

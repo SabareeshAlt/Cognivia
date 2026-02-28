@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AcademeRAG - Knowledge Grounded Academic Assistant</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box; 
+      font-family: "Exo 2", sans-serif; 
+    }
+    html, body { 
+      height: 100%; 
+      overflow: hidden; 
+    }
+    body {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      color: #0ff;
+      position: relative;
+      overflow: hidden;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(0, 100, 150, 0.1) 0%, transparent 20%),
+        radial-gradient(circle at 90% 80%, rgba(150, 0, 200, 0.1) 0%, transparent 20%),
+        linear-gradient(135deg, #0a0a1a, #000);
+    }
+    .grid-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: 
+        linear-gradient(rgba(0, 200, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 200, 255, 0.05) 1px, transparent 1px);
+      background-size: 30px 30px;
+      z-index: 0;
+    }
+    .scanlines {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0%,
+        rgba(0, 255, 255, 0.03) 1px,
+        transparent 2px
+      );
+      z-index: 1;
+      pointer-events: none;
+      animation: scan 8s linear infinite;
+    }
+    @keyframes scan {
+      0% { background-position: 0 0; }
+      100% { background-position: 0 100%; }
+    }
+    .glitch-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.15),
+        rgba(0, 0, 0, 0.15) 1px,
+        transparent 1px,
+        transparent 2px
+      );
+      opacity: 0;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .login-box {
+      width: 420px;
+      padding: 80px 40px 50px;
+      border-radius: 8px;
+      background: rgba(10, 15, 30, 0.85);
+      box-shadow: 0 0 30px rgba(0, 200, 255, 0.3);
+      text-align: center;
+      position: relative;
+      z-index: 3;
+      animation: fadeInUp 1.2s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+      backdrop-filter: blur(5px);
+      border: 1px solid rgba(0, 200, 255, 0.3);
+      overflow: hidden;
+    }
+    .login-box::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(0, 200, 255, 0.2), transparent);
+      transition: 0.5s;
+    }
+    .login-box:hover::before {
+      left: 100%;
+    }
+    .logo-preview {
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin: -95px auto 25px;
+      display: block;
+      border: 3px solid #0ff;
+      box-shadow: 0 0 20px #0ff, 0 0 40px rgba(0, 200, 255, 0.5);
+      animation: pulseGlow 3s infinite alternate, glitch 0.5s infinite;
+      transition: transform .4s;
+      background: #000;
+      padding: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+    .logo-preview::after {
+      content: "";
+      position: absolute;
+      top: -50%;
+      left: -60%;
+      width: 40%;
+      height: 200%;
+      background: rgba(255, 255, 255, 0.1);
+      transform: rotate(30deg);
+      transition: all 0.8s;
+    }
+    .logo-preview:hover::after {
+      left: 150%;
+    }
+    h1 { 
+      margin-bottom: 8px; 
+      font-size: 28px; 
+      color: #0ff; 
+      animation: fadeSlide 1s ease .4s both; 
+      font-weight: 700;
+      font-family: "Orbitron", sans-serif;
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px rgba(0, 255, 255, 0.7);
+    }
+    h2 { 
+      margin-bottom: 30px; 
+      color: #0af; 
+      font-size: 18px; 
+      animation: fadeSlide 1s ease .6s both; 
+      font-weight: 400;
+      letter-spacing: 1px;
+    }
+    form { width: 100%; }
+    .field {
+      position: relative;
+      width: 90%;
+      margin: 20px auto;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeSlide .8s ease forwards;
+    }
+    .field:nth-child(1) { animation-delay: .8s; }
+    .field:nth-child(2) { animation-delay: 1s; }
+    .field input {
+      width: 100%;
+      padding: 18px 50px 18px 22px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 200, 255, 0.5);
+      background: rgba(0, 20, 40, 0.7);
+      color: #0ff;
+      font-size: 16px;
+      outline: none;
+      transition: all .3s;
+      font-family: "Exo 2", sans-serif;
+    }
+    .field input:focus {
+      border-color: #0ff;
+      box-shadow: 0 0 15px rgba(0, 200, 255, 0.7);
+      background: rgba(0, 30, 60, 0.8);
+    }
+    .field label {
+      position: absolute;
+      left: 22px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 15px;
+      color: rgba(0, 200, 255, 0.7);
+      pointer-events: none;
+      transition: all .22s ease;
+      font-family: "Exo 2", sans-serif;
+    }
+    .field input:focus + label,
+    .field input.not-empty + label {
+      top: -12px;
+      font-size: 13px;
+      color: #0ff;
+      background: rgba(10, 15, 30, 0.9);
+      padding: 0 8px;
+      border-radius: 3px;
+      border: 1px solid rgba(0, 200, 255, 0.5);
+    }
+    .underline {
+      position: absolute;
+      left: 22px; right: 22px;
+      bottom: 10px;
+      height: 2px;
+    }
+    .underline .bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg,#0ff,#0af,#0ff);
+      transition: width .3s;
+    }
+    .icon {
+      position: absolute;
+      right: 18px; top: 50%;
+      transform: translateY(-50%);
+      font-size: 22px;
+      color: rgba(0, 255, 255, 0.8);
+      cursor: pointer;
+      text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+    }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%,60% { transform: translateX(-6px); }
+      40%,80% { transform: translateX(6px); }
+    }
+    .shake input { 
+      border-color: #f00 !important; 
+      box-shadow: 0 0 18px #f00; 
+    }
+    .btn {
+      width: 90%;
+      padding: 18px;
+      margin: 30px auto 15px;
+      border: none;
+      border-radius: 4px;
+      background: linear-gradient(270deg,#0ff,#0af,#0ff,#0ff);
+      background-size: 400% 400%;
+      color: #000;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      display: block;
+      animation: gradientMove 8s ease infinite;
+      transition: all .3s;
+      position: relative;
+      overflow: hidden;
+      font-family: "Orbitron", sans-serif;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      box-shadow: 0 0 15px rgba(0, 200, 255, 0.5);
+    }
+    .btn::after {
+      content: "";
+      position: absolute;
+      top: 0; left: -75%;
+      width: 50%; height: 100%;
+      background: rgba(255,255,255,0.3);
+      transform: skewX(-20deg);
+      animation: shine 3s infinite;
+    }
+    .btn:hover { 
+      transform: translateY(-3px); 
+      box-shadow: 0 5px 20px rgba(0, 200, 255, 0.8);
+    }
+    .error { 
+      color: #f55; 
+      font-size: 15px; 
+      margin-top: 15px; 
+      min-height: 22px; 
+      font-weight: 500;
+      text-shadow: 0 0 5px rgba(255, 85, 85, 0.5);
+    }
+    .links { 
+      margin-top: 20px; 
+      color: #7cf; 
+      font-size: 15px; 
+      animation: fadeSlide 1s ease 1.2s both; 
+    }
+    .links a { 
+      color: #0ff; 
+      margin: 0 10px; 
+      text-decoration: none; 
+      font-weight: 500;
+      transition: all 0.3s;
+      position: relative;
+      padding: 3px 0;
+    }
+    .links a::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 0;
+      height: 1px;
+      background: #0ff;
+      transition: width 0.3s;
+    }
+    .links a:hover::after {
+      width: 100%;
+    }
+    .gpt-page {
+      display: none;
+      flex-direction: column;
+      height: 100vh;
+      width: 100%;
+      position: relative;
+      z-index: 3;
+      background: rgba(5, 10, 20, 0.95);
+    }
+    .block
+    {
+      animation: appear linear;
+      animation-timeline: view();
+    }
+    header {
+      text-align: center;
+      padding: 25px;
+      font-size: 32px;
+      font-weight: 700;
+      background: linear-gradient(90deg,#0ff,#0af,#0ff);
+      background-size: 300% 300%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: headingFlow 6s ease infinite;
+      position: relative;
+      border-bottom: 1px solid rgba(0, 200, 255, 0.3);
+      font-family: "Orbitron", sans-serif;
+      letter-spacing: 3px;
+      text-shadow: 0 0 10px rgba(0, 200, 255, 0.5);
+    }
+    .header-logo {
+      position: absolute;
+      left: 25px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 45px;
+      height: 45px;
+      border-radius: 50%;
+      background: url('https://media.istockphoto.com/id/1445426863/vector/chat-bot-vector-logo-design-concept.jpg?s=612x612&w=0&k=20&c=XDdfzS4lNW9yxQ0BQGZq9KMLL4bJ8ywXlYdAhBSuoCA=') center/cover;
+      border: 2px solid #0ff;
+      box-shadow: 0 0 15px rgba(0, 200, 255, 0.7);
+    }
+    @keyframes headingFlow {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 25px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      background: rgba(5, 10, 20, 0.7);
+      min-height: 0; /* FIX: Allows container to shrink and enables scrolling */
+    }
+    .message {
+      max-width: 85%;
+      padding: 20px 25px;
+      border-radius: 8px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-wrap: break-word; /* FIX: Ensures text wraps properly */
+      animation: fadeIn .5s ease forwards;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      position: relative;
+      overflow: hidden;
+      font-size: 20px;
+      border: 1px solid transparent;
+    }
+    .message::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(120deg, transparent, rgba(255,255,255,0.05), transparent);
+      transform: translateX(-100%);
+    }
+    .message:hover::before {
+      animation: shineMessage 1.5s ease;
+    }
+    .user {
+      align-self: flex-end;
+      background: linear-gradient(135deg, rgba(0, 100, 200, 0.3), rgba(0, 50, 100, 0.5));
+      color: #0ff;
+      border-bottom-right-radius: 3px;
+      border: 1px solid rgba(0, 200, 255, 0.3);
+      box-shadow: 0 0 15px rgba(0, 200, 255, 0.2);
+    }
+    .bot {
+      align-self: flex-start;
+      background: linear-gradient(135deg, rgba(30, 30, 60, 0.5), rgba(10, 15, 30, 0.7));
+      color: #7cf;
+      border-bottom-left-radius: 3px;
+      border: 1px solid rgba(0, 200, 255, 0.2);
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); }}
+    @keyframes shineMessage { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+    .input-area {
+      display: flex;
+      padding: 20px;
+      border-top: 1px solid rgba(0, 200, 255, 0.2);
+      background: rgba(5, 10, 20, 0.9);
+      gap: 15px;
+    }
+    .input-area textarea {
+      flex: 1;
+      resize: none;
+      padding: 15px 20px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 200, 255, 0.3);
+      background: rgba(0, 20, 40, 0.7);
+      color: #0ff;
+      font-size: 16px;
+      transition: all 0.3s;
+      font-family: "Exo 2", sans-serif;
+    }
+    .input-area textarea:focus {
+      outline: none;
+      border-color: #0ff;
+      box-shadow: 0 0 15px rgba(0, 200, 255, 0.5);
+      background: rgba(0, 30, 60, 0.8);
+    }
+    .input-area textarea::placeholder {
+      color: rgba(0, 200, 255, 0.5);
+    }
+    .input-area button {
+      padding: 0 30px;
+      border: none;
+      background: linear-gradient(135deg,#0ff,#0af);
+      color: #000;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 700;
+      transition: .2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "Orbitron", sans-serif;
+      letter-spacing: 1px;
+      box-shadow: 0 0 15px rgba(0, 200, 255, 0.5);
+    }
+    .input-area button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(0, 200, 255, 0.8);
+    }
+    @keyframes pulseGlow {
+      0% { box-shadow: 0 0 15px rgba(0,255,255,0.4); }
+      100% { box-shadow: 0 0 40px rgba(0,255,255,1); }
+    }
+    @keyframes gradientMove {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    @keyframes shine {
+      0% { left: -75%; }
+      100% { left: 125%; }
+    }
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(40px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-bg"></div>
+  <div class="scanlines"></div>
+  <div class="glitch-overlay" id="glitchOverlay"></div>
+
+  <div class="login-box" id="loginPage">
+    <img class="logo-preview" src="https://media.istockphoto.com/id/1445426863/vector/chat-bot-vector-logo-design-concept.jpg?s=612x612&w=0&k=20&c=XDdfzS4lNW9yxQ0BQGZq9KMLL4bJ8ywXlYdAhBSuoCA=" alt="AcademeRAG Logo">
+    <h1>ACADEMERAG</h1>
+    <h2>College Assistant</h2>
+    <form id="loginForm">
+      <div class="field" id="field-username">
+        <input id="username" type="text" placeholder=" " required />
+        <label for="username">USERNAME</label>
+        <div class="underline"><div class="bar" id="bar-username"></div></div>
+        <div class="icon">👤</div>
+      </div>
+      <div class="field" id="field-password">
+        <input id="password" type="password" placeholder=" " required />
+        <label for="password">PASSWORD</label>
+        <div class="underline"><div class="bar" id="bar-password"></div></div>
+        <div class="icon" id="togglePass">👁️</div>
+      </div>
+      <button type="submit" class="btn">Login</button>
+      <div id="errorMsg" class="error"></div>
+      <div class="links">
+        <a href="#">FORGOT CREDENTIALS</a> |
+        <a href="#">CREATE ACCOUNT</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="gpt-page" id="gptPage">
+    <header>
+      <div class="header-logo"></div>
+      ACADEMERAG
+    </header>
+    <div class="chat-container" id="chat"></div>
+    <div class="input-area">
+      <textarea id="input" rows="2" placeholder="ENTER QUERY..."></textarea>
+      <button id="sendBtn">TRANSMIT</button>
+    </div>
+  </div>
+
+  <script>
+    const USERNAME = "admin";
+    const PASSWORD = "12345";
+
+    const loginForm = document.getElementById("loginForm");
+    const username = document.getElementById("username");
+    const password = document.getElementById("password");
+    const errorMsg = document.getElementById("errorMsg");
+    const loginPage = document.getElementById("loginPage");
+    const gptPage = document.getElementById("gptPage");
+    const chat = document.getElementById("chat");
+    const input = document.getElementById("input");
+    const sendBtn = document.getElementById("sendBtn");
+
+    loginForm.addEventListener("submit", e => {
+      e.preventDefault();
+      if (username.value === USERNAME && password.value === PASSWORD) {
+        loginPage.style.display = "none";
+        gptPage.style.display = "flex";
+        input.focus();
+        errorMsg.textContent = "";
+        setTimeout(() => addMessage("👋 Greetings User. How can I assist you? ", "bot"), 300);
+      } else {
+        errorMsg.textContent = "ACCESS DENIED: INVALID CREDENTIALS";
+        [document.getElementById("field-username"), document.getElementById("field-password")].forEach(f => {
+          f.classList.add("shake");
+          setTimeout(() => f.classList.remove("shake"), 600);
+        });
+      }
+    });
+
+    function addMessage(text, sender) {
+      const msgDiv = document.createElement("div");
+      msgDiv.className = "message " + sender;
+      msgDiv.textContent = text;
+      chat.appendChild(msgDiv);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function handleSendMessage() {
+      const question = input.value.trim();
+      if (!question) return;
+      addMessage(question, "user");
+      input.value = "";
+      input.disabled = true;
+      sendBtn.disabled = true;
+      const thinkingMsg = document.createElement("div");
+      thinkingMsg.className = "message bot";
+      thinkingMsg.textContent = "Processing... Retrieving context and generating response...";
+      chat.appendChild(thinkingMsg);
+      chat.scrollTop = chat.scrollHeight;
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/ask/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question }),
+        });
+        const data = await response.json();
+        chat.removeChild(thinkingMsg);
+        if (!response.ok) {
+          // Show the actual backend error instead of a generic message
+          addMessage("⚠️ Backend Error (" + response.status + "): " + (data.error || response.statusText), "bot");
+          return;
+        }
+        if (data.answer) {
+          addMessage(data.answer, "bot");
+        } else if (data.error) {
+          addMessage("⚠️ " + data.error, "bot");
+        } else {
+          addMessage("Received an empty response from the server.", "bot");
+        }
+      } catch (error) {
+        console.error('Fetch error:', error);
+        chat.removeChild(thinkingMsg);
+        if (error instanceof TypeError && error.message.includes('fetch')) {
+          addMessage("CONNECTION ERROR: Cannot reach the Django server at http://127.0.0.1:8000. Is it running?", "bot");
+        } else {
+          addMessage("SYSTEM ERROR: " + error.message, "bot");
+        }
+      } finally {
+        input.disabled = false;
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    }
+
+    sendBtn.addEventListener("click", handleSendMessage);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage();
+      }
+    });
+
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,5 @@
+{
+  "min_keyword_hit_rate": 0.6,
+  "min_citation_rate": 0.66,
+  "min_pass_rate": 0.66
+}
