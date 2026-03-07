@@ -42,12 +42,27 @@ async function fetchWithTimeout(
 ): Promise<Response> {
   const useTimeout = timeoutMs > 0;
   const controller = useTimeout ? new AbortController() : null;
+  const externalSignal = init.signal;
+  let onExternalAbort: (() => void) | null = null;
   const timeout = useTimeout ? setTimeout(() => controller?.abort(), timeoutMs) : null;
+  const signal = useTimeout ? controller?.signal : externalSignal;
+
+  if (useTimeout && controller && externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      onExternalAbort = () => controller.abort();
+      externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+    }
+  }
 
   try {
-    return await fetch(input, { ...init, signal: controller?.signal });
+    return await fetch(input, { ...init, signal });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
+      if (externalSignal?.aborted) {
+        throw new ApiError("Request aborted", 499, "REQUEST_ABORTED");
+      }
       throw new ApiError("Request timed out", 408, "TIMEOUT");
     }
     if (error instanceof TypeError) {
@@ -58,6 +73,9 @@ async function fetchWithTimeout(
   } finally {
     if (timeout) {
       clearTimeout(timeout);
+    }
+    if (externalSignal && onExternalAbort) {
+      externalSignal.removeEventListener("abort", onExternalAbort);
     }
   }
 }
@@ -226,14 +244,15 @@ export const apiClient = {
     return payload.tokens;
   },
 
-  async askStream(question: string): Promise<Response> {
+  async askStream(question: string, options?: { signal?: AbortSignal }): Promise<Response> {
     const streamOpenTimeoutMs = 0;
     let response = await fetchApi(
       "/api/ask/stream/",
       {
-      method: "POST",
-      headers: buildHeaders(),
-      body: JSON.stringify({ question }),
+        method: "POST",
+        headers: buildHeaders(),
+        body: JSON.stringify({ question }),
+        signal: options?.signal,
       },
       streamOpenTimeoutMs,
     );
@@ -246,6 +265,7 @@ export const apiClient = {
           method: "POST",
           headers: buildHeaders(),
           body: JSON.stringify({ question }),
+          signal: options?.signal,
         },
         streamOpenTimeoutMs,
       );

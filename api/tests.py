@@ -1,4 +1,5 @@
 import json
+import os
 from unittest.mock import patch
 
 from django.test import TestCase
@@ -133,9 +134,11 @@ class HealthEndpointTests(TestCase):
 
     @patch("api.views._load_rag_modules")
     @patch("api.views._vector_store_fn", autospec=False)
-    def test_health_ready_degraded_when_vector_unavailable(self, mock_vector_store_fn, mock_loader):
+    @patch("requests.get")
+    def test_health_ready_degraded_when_vector_unavailable(self, mock_requests_get, mock_vector_store_fn, mock_loader):
         mock_loader.return_value = None
         mock_vector_store_fn.return_value = None
+        mock_requests_get.side_effect = Exception("dependency down")
         from api import views as api_views
         api_views._vector_ready_cache["ready"] = False
         api_views._vector_ready_cache["last_error"] = "unavailable"
@@ -147,9 +150,11 @@ class HealthEndpointTests(TestCase):
 
     @patch("api.views._load_rag_modules")
     @patch("api.views._vector_store_fn", autospec=False)
-    def test_health_ready_healthy_when_dependencies_available(self, mock_vector_store_fn, mock_loader):
+    @patch("requests.get")
+    def test_health_ready_healthy_when_dependencies_available(self, mock_requests_get, mock_vector_store_fn, mock_loader):
         mock_loader.return_value = None
         mock_vector_store_fn.return_value = object()
+        mock_requests_get.return_value.status_code = 200
         from api import views as api_views
         api_views._vector_ready_cache["ready"] = True
         api_views._vector_ready_cache["last_error"] = None
@@ -158,6 +163,49 @@ class HealthEndpointTests(TestCase):
         payload = response.json()
         self.assertTrue(payload["services"]["vector_store"])
         self.assertTrue(payload["services"]["milvus_cloud"])
+        self.assertTrue(payload["services"]["llm"])
+
+    @patch("api.views._load_rag_modules")
+    @patch("api.views._vector_store_fn", autospec=False)
+    @patch("requests.get")
+    def test_health_ready_groq_falls_back_to_ollama(self, mock_requests_get, mock_vector_store_fn, mock_loader):
+        mock_loader.return_value = None
+        mock_vector_store_fn.return_value = object()
+        from api import views as api_views
+        api_views._vector_ready_cache["ready"] = True
+        api_views._vector_ready_cache["last_error"] = None
+
+        old_provider = os.environ.get("ACADEMERAG_LLM_PROVIDER")
+        old_groq_key = os.environ.get("GROQ_API_KEY")
+        try:
+            os.environ["ACADEMERAG_LLM_PROVIDER"] = "groq"
+            os.environ["GROQ_API_KEY"] = "gsk_test_key"
+
+            class FakeResp:
+                def __init__(self, status_code):
+                    self.status_code = status_code
+
+            def _fake_get(url, *args, **kwargs):
+                if url.endswith("/models"):
+                    raise Exception("groq unreachable")
+                return FakeResp(200)
+
+            mock_requests_get.side_effect = _fake_get
+            response = self.client.get(reverse("health_ready"))
+            self.assertEqual(response.status_code, 200)
+            payload = response.json()
+            self.assertTrue(payload["services"]["ollama"])
+            self.assertFalse(payload["services"]["groq"])
+            self.assertTrue(payload["services"]["llm"])
+        finally:
+            if old_provider is None:
+                os.environ.pop("ACADEMERAG_LLM_PROVIDER", None)
+            else:
+                os.environ["ACADEMERAG_LLM_PROVIDER"] = old_provider
+            if old_groq_key is None:
+                os.environ.pop("GROQ_API_KEY", None)
+            else:
+                os.environ["GROQ_API_KEY"] = old_groq_key
 
 
 class RetrievalBehaviorTests(TestCase):

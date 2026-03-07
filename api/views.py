@@ -168,16 +168,58 @@ def health_ready(request):
     """Readiness probe with dependency checks."""
     started = time.monotonic()
     timeout_s = max(getattr(settings, "RAG_READY_TIMEOUT_MS", 5000), 1000) / 1000.0
-    health_status = {"django": True, "ollama": False, "vector_store": False, "milvus_cloud": False}
+    health_status = {
+        "django": True,
+        "llm": False,
+        "llm_provider": "ollama",
+        "ollama": False,
+        "groq": False,
+        "vector_store": False,
+        "milvus_cloud": False,
+    }
+
+    provider = os.getenv("ACADEMERAG_LLM_PROVIDER", "ollama").strip().lower()
+    use_groq = provider == "groq" or os.getenv("ACADEMERAG_USE_GROQ_CLOUD", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    health_status["llm_provider"] = "groq" if use_groq else "ollama"
 
     try:
         import requests as http_requests
-        health_url = getattr(settings, "OLLAMA_HEALTHCHECK_URL", "http://localhost:11434").rstrip("/") + "/"
-        resp = http_requests.get(health_url, timeout=2)
+
+        ollama_url = getattr(settings, "OLLAMA_HEALTHCHECK_URL", "http://localhost:11434").rstrip("/") + "/"
+        resp = http_requests.get(ollama_url, timeout=2)
         if resp.status_code == 200:
             health_status["ollama"] = True
     except Exception as exc:
         logger.debug("Ollama health probe failed: %s", exc)
+
+    if use_groq:
+        try:
+            import requests as http_requests
+
+            groq_base = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
+            groq_key = os.getenv("GROQ_API_KEY", "").strip()
+            if groq_key:
+                resp = http_requests.get(
+                    f"{groq_base}/models",
+                    headers={"Authorization": f"Bearer {groq_key}"},
+                    timeout=2,
+                )
+                if resp.status_code == 200:
+                    health_status["groq"] = True
+            else:
+                logger.warning("Groq provider configured but GROQ_API_KEY is missing.")
+        except Exception as exc:
+            logger.debug("Groq health probe failed: %s", exc)
+
+    health_status["llm"] = health_status["groq"] if use_groq else health_status["ollama"]
+    if use_groq and not health_status["llm"]:
+        # Support offline mode: if Groq cloud is unavailable, local Ollama keeps service available.
+        health_status["llm"] = health_status["ollama"]
 
     elapsed = time.monotonic() - started
     if elapsed <= timeout_s:
@@ -195,7 +237,11 @@ def health_ready(request):
     else:
         logger.warning("Readiness check timed out before vector dependency checks.")
 
-    overall = "healthy" if all(health_status.values()) else "degraded"
+    overall = (
+        "healthy"
+        if health_status["django"] and health_status["llm"] and health_status["vector_store"]
+        else "degraded"
+    )
     return JsonResponse({"status": overall, "services": health_status})
 
 

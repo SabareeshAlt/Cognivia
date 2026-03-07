@@ -1,150 +1,226 @@
 # AcademeRAG-Final
 
-## Project Summary
-AcademeRAG-Final is a full-stack Retrieval-Augmented Generation system with:
+AcademeRAG-Final is a full-stack Retrieval-Augmented Generation (RAG) platform for academic question answering. It combines a Django API backend, a React/Vite frontend, and a Milvus-based retrieval layer with provider-routed LLM generation (Groq cloud and local Ollama fallback).
 
-- A Django backend API for authentication, chat, health, and diagnostics
-- A React/Vite frontend for auth and chat UX
-- A Milvus (Zilliz Cloud) vector retrieval pipeline for document-grounded responses
-- Ollama-based embedding and generation integration
-- CI and security workflows enforcing quality and supply-chain controls
+## What This Project Does
 
-This README documents the implemented system behavior and workflow, not sample usage.
+- Authenticates users with JWT access/refresh tokens.
+- Accepts user questions through REST and streaming endpoints.
+- Retrieves relevant document chunks from Milvus/Zilliz before generation.
+- Generates grounded responses with Groq-first routing and optional local Ollama fallback.
+- Exposes health, readiness, metrics, and admin diagnostics endpoints.
 
-## Implemented Architecture
+## Current Stack
 
-### Backend Application Layer
-- Django project configuration: `rag_project/settings.py`, `rag_project/urls.py`
-- API module: `api/`
-  - `auth_views.py`: register/login/refresh/me JWT flow
-  - `auth_utils.py`: JWT verification helpers
-  - `views.py`: ask endpoints (sync + streaming), health endpoints, metrics, admin diagnostics
-  - `middleware.py`: request-id and metrics middleware
-  - `rate_limit.py`: IP-based rate limiting hooks
-  - `logging_*`: structured request-safe logging format and filters
+- Backend: Django, Django REST Framework, SimpleJWT, django-ratelimit, django-cors-headers
+- Retrieval: LangChain, Milvus (local file or Zilliz Cloud), PyPDF ingestion
+- LLM/Embeddings: Groq (OpenAI-compatible endpoint) + Ollama fallback, Ollama embeddings
+- Frontend: React + TypeScript + Vite + Radix/shadcn components + Zustand
+- Quality/Security: Vitest, Playwright, coverage gates, Bandit, pip-audit, npm audit, SBOM generation
 
-### Retrieval Layer
-- Canonical retrieval implementation: `Milvus.py`
-  - Cloud credential validation
-  - Embedding model wiring
-  - Vector store initialization and readiness tracking
-  - Streaming and non-streaming response paths
-  - Retrieval diagnostics and fallback behavior
-- Ingestion bootstrap: `create_milvus_collection.py`
+## Repository Layout
 
-### Frontend Layer
-- Frontend app root: `Frontend/`
-- Core implementation:
-  - `src/pages/AuthPage.tsx`, `src/pages/ChatPage.tsx`
-  - `src/lib/api-client.ts`, `src/lib/auth.ts`, `src/lib/config.ts`, `src/lib/feature-flags.ts`
-  - `src/store/chat-store.ts`
-- E2E and unit tests:
-  - `tests/e2e/auth.spec.ts`
-  - `src/**/__tests__/*`
+- `main.py`: Unified local launcher (backend + frontend)
+- `manage.py`: Django management commands
+- `rag_project/`: Django project settings and URL config
+- `api/`: Auth endpoints, ask/stream endpoints, health, metrics, middleware
+- `Milvus.py`: Primary retrieval and response pipeline integration
+- `create_milvus_collection.py`: Collection creation/reindex flow
+- `Frontend/`: Main React frontend used by launcher and CI
+- `documents/`: PDF source corpus for ingestion
+- `eval/`: RAG evaluation gate scripts and reports
+- `.github/workflows/`: CI and security pipelines
 
-## Data and Storage Model
+## Runtime Architecture
 
-AcademeRAG uses two storage systems with different responsibilities:
+1. User logs in via `/api/auth/login/`.
+2. Frontend stores tokens and sends authenticated requests.
+3. `/api/ask/` or `/api/ask/stream/` receives question.
+4. Backend loads retrieval/generation functions from `Milvus.py` lazily.
+5. Retrieval fetches relevant chunks from vector store.
+6. Generation composes final answer and returns JSON or stream chunks.
 
-- Milvus/Zilliz Cloud (vector database):
-  - Stores document embeddings and vector index
-  - Used by retrieval pipeline in `Milvus.py`
-- Django relational database (`DB_ENGINE=sqlite|postgres`):
-  - Stores application state (users/auth and Django models)
-  - Configured in `rag_project/settings.py`
+## Environment Configuration
 
-This split is intentional: vector retrieval and app relational persistence are separate concerns.
+Configuration is environment-first and validated at startup.
 
-## Implemented Runtime Workflow
+Core variables include:
 
-### 1) Startup and Configuration
-- Environment is loaded from `.env` and validated with fail-fast checks in `rag_project/settings.py`.
-- Missing required keys raise startup errors immediately.
-- `main.py` orchestrates backend + frontend startup, migration execution, health wait, and port conflict resolution.
+- `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`
+- `DB_ENGINE` (`sqlite` or `postgres`) and postgres variables when needed
+- `CORS_ALLOW_ALL_ORIGINS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`
+- `JWT_ACCESS_MINUTES`, `JWT_REFRESH_DAYS`
+- `RATELIMIT_DEFAULT`, `AUTH_REGISTER_RATELIMIT`, `AUTH_LOGIN_RATELIMIT`, `AUTH_REFRESH_RATELIMIT`
+- `OLLAMA_HEALTHCHECK_URL`
+- `ACADEMERAG_LLM_PROVIDER` (`ollama` or `groq`)
+- `GROQ_API_KEY`, `GROQ_BASE_URL`, `ACADEMERAG_GROQ_MODEL`
+- `ACADEMERAG_GROQ_TIMEOUT_SECONDS`
+- `ACADEMERAG_MILVUS_URI`, `ACADEMERAG_MILVUS_TOKEN`, `COLLECTION_NAME`
+- `EMBEDDING_MODEL`, `ACADEMERAG_LLM_MODEL`, `ACADEMERAG_TOP_K`
 
-### 2) Document Ingestion Workflow
-- Source PDFs are read from `documents/`.
-- `create_milvus_collection.py --recreate-safe` performs controlled ingestion:
-  - Reuses existing collection when corpus/chunk profile matches
-  - Rebuilds when source profile changes or state is absent
-- Milvus cloud mode requires valid non-placeholder token and `https://` URI.
+Use `.env.example` as the reference template.
 
-### 3) Query Workflow
-- Authenticated client submits question to `/api/ask/` or `/api/ask/stream/`.
-- Backend request pipeline:
-  - JWT auth check
-  - Rate-limit enforcement
-  - Retrieval pipeline invocation through `Milvus.py`
-  - Structured response with trace context
-- Health workflow:
-  - Liveness: process is up
-  - Readiness: dependency-aware status (Django/Ollama/vector readiness cache)
+## Local Development
 
-## Security Implementation
+### 1) Install backend dependencies
 
-Implemented controls include:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-- JWT-based auth endpoints with token rotation path
-- Per-endpoint rate limiting for auth and chat paths
-- Strict environment-driven secrets/config (no hardcoded runtime secrets)
-- CORS/CSRF controls driven by explicit origin lists
-- Structured request logging with request IDs
-- CI secret scanning and dependency auditing pipeline
+### 2) Install frontend dependencies
 
-## CI/CD Implementation
+```bash
+cd Frontend
+npm ci
+cd ..
+```
 
-### CI Workflow (`.github/workflows/ci.yml`)
-Implemented gates:
+### 3) Start both services
 
-- Backend:
-  - `python manage.py check`
-  - `coverage run manage.py test`
-  - `coverage report --fail-under=70`
-- Frontend:
-  - `npm run lint`
-  - `npm run test`
-  - `npm run test:coverage`
-  - coverage threshold check from `coverage-summary.json`
-  - `npm run build`
-  - `npm run perf:budget` (uses `VITE_MAX_JS_BUNDLE_KB`)
-  - `npm run test:e2e`
-- Eval gate:
-  - `python eval/rag_eval.py --mode mock --output eval/latest_report.json`
+```bash
+python3 main.py
+```
 
-### Security Workflow (`.github/workflows/security-supply-chain.yml`)
-Implemented gates:
+Default local URLs:
 
-- Gitleaks secret scan
-- Backend: `pip-audit`, `bandit`, CycloneDX SBOM generation
-- Frontend: `npm audit --audit-level=high`, CycloneDX SBOM generation
+- Backend: `http://127.0.0.1:8000`
+- Frontend: `http://127.0.0.1:5173`
 
-## Key Project Files
+You can also run separately:
 
-- Backend settings and routing:
-  - `rag_project/settings.py`
-  - `rag_project/urls.py`
-- API implementation:
-  - `api/views.py`
-  - `api/auth_views.py`
-  - `api/auth_utils.py`
-  - `api/middleware.py`
-- Retrieval implementation:
-  - `Milvus.py`
-  - `create_milvus_collection.py`
-- Full-stack launcher:
-  - `main.py`
-- Frontend implementation:
-  - `Frontend/src/pages/AuthPage.tsx`
-  - `Frontend/src/pages/ChatPage.tsx`
-  - `Frontend/src/lib/api-client.ts`
-  - `Frontend/src/store/chat-store.ts`
-- CI and security pipelines:
-  - `.github/workflows/ci.yml`
-  - `.github/workflows/security-supply-chain.yml`
+```bash
+python3 manage.py runserver 127.0.0.1:8000
+cd Frontend && npm run dev
+```
 
-## Operational Notes
+## Document Ingestion
 
-- `.env` and `Frontend/.env` are intentionally git-ignored.
-- `Frontend/tests/e2e/auth.spec.ts` is deterministic and does not depend on missing baseline snapshots in CI.
-- Bundle budget threshold is controlled via `VITE_MAX_JS_BUNDLE_KB` (CI uses `600`).
+- Put PDF files in `documents/`.
+- Run controlled collection setup/rebuild:
 
+```bash
+python3 create_milvus_collection.py --recreate-safe
+```
+
+- Convenience setup script is available:
+
+```bash
+python3 setup_milvus.py
+```
+
+## Chat UX Behavior
+
+- Streaming responses can be stopped mid-generation using the stop button in chat.
+- Sending a new message while streaming interrupts the in-flight response and starts the new request.
+- Assistant messages are rendered as sanitized markdown (headings, lists, code blocks, links, inline emphasis).
+- Chat threads persist across logout/login on the same browser profile.
+
+## LLM Routing
+
+- `ACADEMERAG_LLM_PROVIDER=groq` routes generation to Groq first.
+- If Groq is enabled and unavailable, fallback to Ollama occurs only when Ollama is reachable.
+- `GROQ_BASE_URL` must be the API endpoint (`https://api.groq.com/openai/v1`), not the Groq Console URL.
+
+## API Endpoints
+
+Auth:
+
+- `POST /api/auth/register/`
+- `POST /api/auth/login/`
+- `POST /api/auth/refresh/`
+- `GET /api/auth/me/`
+
+RAG:
+
+- `POST /api/ask/`
+- `POST /api/ask/stream/`
+
+Ops:
+
+- `GET /api/health/live/`
+- `GET /api/health/ready/`
+- `GET /api/health/` (compat alias)
+- `GET /api/metrics/`
+- `GET /api/admin/retrieval/diagnostics/` (staff/superuser)
+
+## Testing and Quality Gates
+
+Backend:
+
+```bash
+python3 manage.py check
+python3 manage.py test
+```
+
+Frontend:
+
+```bash
+cd Frontend
+npm run lint
+npm run test
+npm run test:coverage
+npm run build
+npm run perf:budget
+npm run test:e2e
+```
+
+CI (`.github/workflows/ci.yml`) enforces:
+
+- Django checks + backend coverage floor
+- Frontend lint/test/coverage/build
+- Bundle budget check
+- Playwright E2E
+- RAG evaluation regression gate (`eval/rag_eval.py`)
+
+Security workflow (`.github/workflows/security-supply-chain.yml`) enforces:
+
+- Secret scanning (Gitleaks)
+- Backend audits (`pip-audit`, `bandit`)
+- Frontend `npm audit`
+- SBOM generation for backend/frontend
+
+## Latest Implemented Changes
+
+- Integrated and hardened JWT auth flow with register/login/refresh/me endpoints.
+- Added rate limiting controls for auth and question endpoints.
+- Added request ID middleware and structured logging formatters/filters.
+- Added readiness/liveness/metrics endpoints and dependency-aware readiness checks.
+- Connected API retrieval path to `Milvus.py` lazy-loading flow.
+- Added admin-only retrieval diagnostics endpoint.
+- Added frontend API client resilience:
+  - timeout handling
+  - retry on transient failures
+  - local API port failover probing
+- Added frontend feature flag resolution and canary bucketing.
+- Added CI gates for backend/frontend tests, coverage, bundle budget, E2E.
+- Added security and supply-chain workflow with audits and SBOM output.
+- Added RAG evaluation gate in CI using `eval/rag_eval.py`.
+- Added Groq provider integration with runtime provider failover in `Milvus.py`.
+- Added Groq/Ollama-aware readiness reporting in `api/views.py`.
+- Added streaming interruption controls and markdown rendering in `Frontend/src/pages/ChatPage.tsx`.
+- Fixed chat thread persistence across auth flows by preserving persisted chat state.
+
+## Enhancement Opportunities (Deep-Dive)
+
+- Add server-side conversation persistence (user-owned threads in DB) to support multi-device continuity and avoid localStorage-only history.
+- Add explicit latency breakdown metrics for retrieval, rerank, and generation phases (Prometheus histograms + trace IDs on each phase).
+- Move expensive index sync/rebuild out of request path (background job queue + explicit indexing status endpoint).
+- Introduce retrieval quality controls (citation spans, source confidence, and low-confidence fallback prompts).
+- Consolidate legacy duplicate RAG modules (`optimized_rag.py`, `rag_service.py`, `api/optimized_rag.py`) to reduce drift and maintenance risk.
+
+## Important Notes
+
+- `main.py` launches the `Frontend/` workspace as the active UI.
+- Keep secrets out of source control and rotate any previously committed credentials.
+- Generated artifacts (`db.sqlite3`, local vector DB files, coverage/build outputs) should be treated as runtime outputs, not source of truth.
+
+## Kept Project Documentation Files
+
+Per repository cleanup, only these Markdown files are retained:
+
+- `README.md`
+- `Final_Integration Summary.md`
+- `Architecture_Diagrams.md`

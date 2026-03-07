@@ -46,6 +46,5 @@ export const authStorage = {
   clearAll(): void {
     this.clearUser();
     this.clearTokens();
-    localStorage.removeItem("rag_chats");
   },
 };

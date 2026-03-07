@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bot, Rocket, X, MessageSquare, Plus, LogOut, Menu, AlertTriangle } from "lucide-react";
+import { Bot, Rocket, X, MessageSquare, Plus, LogOut, Menu, AlertTriangle, Square } from "lucide-react";
 import { toast } from "sonner";
+import DOMPurify from "dompurify";
 
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { authStorage } from "@/lib/auth";
@@ -10,6 +11,112 @@ import { config } from "@/lib/config";
 import { logTelemetry, getTelemetryEvents } from "@/lib/telemetry";
 import { sanitizeText } from "@/lib/sanitize";
 import { useChatStore } from "@/store/chat-store";
+
+function escapeHtml(input: string): string {
+  return input
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function renderInlineMarkdown(input: string): string {
+  let text = escapeHtml(input);
+  text = text.replace(/`([^`]+)`/g, "<code>$1</code>");
+  text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  text = text.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+  return text;
+}
+
+function markdownToSafeHtml(input: string): string {
+  const lines = input.split("\n");
+  const chunks: string[] = [];
+  let inCodeBlock = false;
+  let codeBuffer: string[] = [];
+  let listMode: "ul" | "ol" | null = null;
+
+  const closeListIfOpen = () => {
+    if (listMode === "ul") chunks.push("</ul>");
+    if (listMode === "ol") chunks.push("</ol>");
+    listMode = null;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    if (line.startsWith("```")) {
+      closeListIfOpen();
+      if (inCodeBlock) {
+        chunks.push(`<pre><code>${escapeHtml(codeBuffer.join("\n"))}</code></pre>`);
+        codeBuffer = [];
+        inCodeBlock = false;
+      } else {
+        inCodeBlock = true;
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBuffer.push(rawLine);
+      continue;
+    }
+
+    if (!line.trim()) {
+      closeListIfOpen();
+      continue;
+    }
+
+    if (line.startsWith("### ")) {
+      closeListIfOpen();
+      chunks.push(`<h3>${renderInlineMarkdown(line.slice(4))}</h3>`);
+      continue;
+    }
+    if (line.startsWith("## ")) {
+      closeListIfOpen();
+      chunks.push(`<h2>${renderInlineMarkdown(line.slice(3))}</h2>`);
+      continue;
+    }
+    if (line.startsWith("# ")) {
+      closeListIfOpen();
+      chunks.push(`<h1>${renderInlineMarkdown(line.slice(2))}</h1>`);
+      continue;
+    }
+
+    if (/^\d+\.\s+/.test(line)) {
+      if (listMode !== "ol") {
+        closeListIfOpen();
+        chunks.push("<ol>");
+        listMode = "ol";
+      }
+      chunks.push(`<li>${renderInlineMarkdown(line.replace(/^\d+\.\s+/, ""))}</li>`);
+      continue;
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      if (listMode !== "ul") {
+        closeListIfOpen();
+        chunks.push("<ul>");
+        listMode = "ul";
+      }
+      chunks.push(`<li>${renderInlineMarkdown(line.replace(/^[-*]\s+/, ""))}</li>`);
+      continue;
+    }
+
+    closeListIfOpen();
+    chunks.push(`<p>${renderInlineMarkdown(line)}</p>`);
+  }
+
+  if (inCodeBlock && codeBuffer.length) {
+    chunks.push(`<pre><code>${escapeHtml(codeBuffer.join("\n"))}</code></pre>`);
+  }
+  closeListIfOpen();
+
+  return DOMPurify.sanitize(chunks.join(""), {
+    ALLOWED_TAGS: ["h1", "h2", "h3", "p", "ul", "ol", "li", "code", "pre", "strong", "em", "a", "br"],
+    ALLOWED_ATTR: ["href", "target", "rel"],
+  });
+}
 
 const ChatPage = () => {
   const navigate = useNavigate();
@@ -29,9 +136,14 @@ const ChatPage = () => {
   const appendMessage = useChatStore((state) => state.appendMessage);
   const updateMessage = useChatStore((state) => state.updateMessage);
   const updateTitleIfNew = useChatStore((state) => state.updateTitleIfNew);
-  const resetChats = useChatStore((state) => state.reset);
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const scrollRafRef = useRef<number | null>(null);
+  const streamReaderRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
+  const streamTokenRef = useRef(0);
   const activeChat = useMemo(() => chats.find((chat) => chat.id === activeChatId), [chats, activeChatId]);
   const isWaitingForFirstChunk = Boolean(
     isLoading &&
@@ -65,20 +177,61 @@ const ChatPage = () => {
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    return () => {
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+      }
+      streamAbortRef.current?.abort();
+      streamReaderRef.current?.cancel().catch(() => undefined);
+    };
+  }, []);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || !shouldAutoScrollRef.current) {
+      return;
+    }
+
+    if (scrollRafRef.current !== null) {
+      cancelAnimationFrame(scrollRafRef.current);
+    }
+
+    scrollRafRef.current = requestAnimationFrame(() => {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: isLoading ? "auto" : "smooth",
+      });
+      scrollRafRef.current = null;
+    });
   }, [activeChat?.messages, isLoading]);
 
   const handleNewChat = () => {
     createChat();
   };
 
+  const stopStreaming = async () => {
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
+    if (streamReaderRef.current) {
+      await streamReaderRef.current.cancel().catch(() => undefined);
+      streamReaderRef.current = null;
+    }
+    setIsLoading(false);
+  };
+
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!input.trim() || !activeChatId) return;
+    if (!activeChatId) return;
+
+    if (isLoading) {
+      await stopStreaming();
+    }
+    if (!input.trim()) return;
 
     const currentInput = sanitizeText(input);
     setInput("");
     setIsLoading(true);
+    const streamToken = ++streamTokenRef.current;
 
     appendMessage(activeChatId, { id: Date.now().toString(), role: "user", content: currentInput });
     updateTitleIfNew(activeChatId, currentInput);
@@ -97,12 +250,15 @@ const ChatPage = () => {
     appendMessage(activeChatId, { id: botMsgId, role: "assistant", content: "" });
 
     try {
-      const response = await apiClient.askStream(currentInput);
+      const controller = new AbortController();
+      streamAbortRef.current = controller;
+      const response = await apiClient.askStream(currentInput, { signal: controller.signal });
       if (!response.body) {
         throw new ApiError("No response body", 500, "NO_RESPONSE_BODY");
       }
 
       const reader = response.body.getReader();
+      streamReaderRef.current = reader;
       const decoder = new TextDecoder();
       let botText = "";
 
@@ -113,12 +269,20 @@ const ChatPage = () => {
         updateMessage(activeChatId, botMsgId, sanitizeText(botText));
       }
 
+      if (streamTokenRef.current !== streamToken) {
+        return;
+      }
       logTelemetry("chat.response_complete", {
         chatId: activeChatId,
         length: botText.length,
       });
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError("Unknown error", 500, "UNKNOWN");
+      const isAbort =
+        apiError.code === "REQUEST_ABORTED" || (error instanceof DOMException && error.name === "AbortError");
+      if (isAbort || streamTokenRef.current !== streamToken) {
+        return;
+      }
 
       if (apiError.status === 401 || apiError.code === "NO_REFRESH_TOKEN") {
         authStorage.clearAll();
@@ -139,7 +303,11 @@ const ChatPage = () => {
         traceId: apiError.traceId,
       });
     } finally {
-      setIsLoading(false);
+      if (streamTokenRef.current === streamToken) {
+        streamAbortRef.current = null;
+        streamReaderRef.current = null;
+        setIsLoading(false);
+      }
     }
   };
 
@@ -155,7 +323,6 @@ const ChatPage = () => {
 
   const handleLogout = () => {
     authStorage.clearAll();
-    resetChats();
     setShowLogoutDialog(false);
     navigate("/");
   };
@@ -252,7 +419,15 @@ const ChatPage = () => {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-6 py-8 pb-32">
+        <div
+          ref={scrollContainerRef}
+          onScroll={(event) => {
+            const container = event.currentTarget;
+            const distanceToBottom = container.scrollHeight - (container.scrollTop + container.clientHeight);
+            shouldAutoScrollRef.current = distanceToBottom <= 120;
+          }}
+          className="flex-1 overflow-y-auto px-6 py-8 pb-32"
+        >
           <div className="mx-auto max-w-[1000px] space-y-8" role="log" aria-live="polite" aria-relevant="additions text">
             {activeChat?.messages.map((msg) => (
               msg.role === "assistant" && msg.content.trim() === "" ? null :
@@ -270,7 +445,10 @@ const ChatPage = () => {
                       : "rounded-bl-sm border border-border bg-card text-card-foreground"
                   }`}
                 >
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                  <div
+                    className="markdown-content text-inherit [&_a]:underline [&_a]:decoration-current [&_a:hover]:opacity-80 [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/10 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_h1]:mb-3 [&_h1]:mt-1 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:mt-1 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:mt-1 [&_h3]:text-base [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-6"
+                    dangerouslySetInnerHTML={{ __html: markdownToSafeHtml(msg.content) }}
+                  />
                 </div>
               </div>
             ))}
@@ -302,20 +480,33 @@ const ChatPage = () => {
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 placeholder={config.featureFlags.chatEnabled ? "Ask about your documents..." : "Chat temporarily disabled"}
-                disabled={isLoading || !config.featureFlags.chatEnabled || isOffline}
+                disabled={!config.featureFlags.chatEnabled || isOffline}
                 className="flex-1 bg-transparent px-6 py-4 text-base text-foreground placeholder:text-muted-foreground outline-none"
                 aria-label="Ask a question"
               />
+              {isLoading && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopStreaming().catch(() => undefined);
+                  }}
+                  className="rounded-full bg-destructive p-4 text-destructive-foreground transition-all hover:opacity-90"
+                  aria-label="Stop streaming"
+                  title="Stop streaming"
+                >
+                  <Square size={20} />
+                </button>
+              )}
               <button
                 type="submit"
-                disabled={isLoading || !input.trim() || !config.featureFlags.chatEnabled || isOffline}
+                disabled={!input.trim() || !config.featureFlags.chatEnabled || isOffline}
                 className={`rounded-full p-4 text-primary-foreground transition-all hover:scale-105 ${
-                  isLoading || !input.trim() || !config.featureFlags.chatEnabled || isOffline
+                  !input.trim() || !config.featureFlags.chatEnabled || isOffline
                     ? "cursor-not-allowed bg-muted"
                     : "bg-gradient-to-r from-primary to-primary/80 shadow-lg"
                 }`}
               >
-                <Rocket size={24} className={isLoading ? "animate-pulse" : ""} />
+                <Rocket size={24} />
               </button>
             </form>
           </div>

@@ -1,0 +1,3 @@
+# Primary backend dependency lock-in for deployment.
+# Keep this file as the default deploy entrypoint.
+-r requirements_django.txt

@@ -9,7 +9,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 
 import { apiClient, ApiError } from "@/lib/api-client";
 import { authStorage } from "@/lib/auth";
-import { useChatStore } from "@/store/chat-store";
 
 const signInSchema = z.object({
   email: z.string().email("Provide a valid email"),
@@ -32,7 +31,6 @@ const AuthPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
-  const resetChats = useChatStore((state) => state.reset);
 
   const signInForm = useForm<SignInValues>({ resolver: zodResolver(signInSchema), mode: "onSubmit" });
   const signUpForm = useForm<SignUpValues>({ resolver: zodResolver(signUpSchema), mode: "onSubmit" });
@@ -65,7 +63,6 @@ const AuthPage = () => {
     setIsSubmitting(true);
     try {
       await apiClient.login(values.email, values.password);
-      resetChats();
       toast.success("Welcome back!");
       navigate("/chat");
     } catch (error) {

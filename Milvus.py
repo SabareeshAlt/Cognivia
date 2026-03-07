@@ -3,6 +3,9 @@ import logging
 import os
 import re
 import time
+from urllib.error import URLError
+from urllib.parse import urlparse
+from urllib.request import urlopen
 from collections import Counter
 from functools import lru_cache
 from typing import Optional
@@ -16,6 +19,11 @@ from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pymilvus import CollectionSchema, DataType, FieldSchema, MilvusClient
 from pypdf import PdfReader
+
+try:
+    from langchain_openai import ChatOpenAI
+except Exception:  # pragma: no cover - handled at runtime when groq is selected
+    ChatOpenAI = None
 
 os.environ["MILVUS_ASYNC"] = "0"
 
@@ -59,6 +67,13 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_str(name: str, default: str = "") -> str:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip()
+
+
 def _looks_like_placeholder(value: str) -> bool:
     normalized = value.strip().lower()
     return (
@@ -73,6 +88,11 @@ EMBEDDING_MODEL = _required_env("EMBEDDING_MODEL")
 LLM_MODEL = _required_env("ACADEMERAG_LLM_MODEL")
 OLLAMA_BASE_URL = _required_env("OLLAMA_BASE_URL")
 LLM_TEMPERATURE = _env_float("ACADEMERAG_LLM_TEMPERATURE", 0.7)
+LLM_PROVIDER = _env_str("ACADEMERAG_LLM_PROVIDER", "ollama").lower()
+GROQ_API_KEY = _env_str("GROQ_API_KEY")
+GROQ_BASE_URL = _env_str("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+GROQ_MODEL = _env_str("ACADEMERAG_GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_REQUEST_TIMEOUT_SECONDS = _env_float("ACADEMERAG_GROQ_TIMEOUT_SECONDS", 15.0)
 TOP_K = _env_int("ACADEMERAG_TOP_K", 3)
 DYNAMIC_TOP_K_MIN = _env_int("ACADEMERAG_TOP_K_MIN", 2)
 DYNAMIC_TOP_K_MAX = _env_int("ACADEMERAG_TOP_K_MAX", 6)
@@ -551,7 +571,6 @@ def get_retrieval_diagnostics() -> dict:
 
 
 def _build_qa_chain():
-    llm = ChatOllama(model=LLM_MODEL, base_url=OLLAMA_BASE_URL, temperature=LLM_TEMPERATURE)
     prompt = ChatPromptTemplate.from_template(
         """
 You are an intelligent College AI Assistant.
@@ -566,7 +585,125 @@ Question:
 Answer:
 """
     )
-    return prompt | llm | StrOutputParser()
+    return prompt
+
+
+def _groq_enabled() -> bool:
+    if _env_bool("ACADEMERAG_USE_GROQ_CLOUD", default=False):
+        return True
+    return LLM_PROVIDER == "groq"
+
+
+def _create_llm_client(provider: str):
+    if provider == "groq":
+        _validate_groq_base_url()
+        if ChatOpenAI is None:
+            raise RuntimeError(
+                "Groq provider requires 'langchain-openai'. Install dependencies from requirements_django.txt."
+            )
+        if not GROQ_API_KEY:
+            raise RuntimeError("GROQ_API_KEY is required when Groq provider is enabled.")
+        return ChatOpenAI(
+            model=GROQ_MODEL,
+            temperature=LLM_TEMPERATURE,
+            api_key=GROQ_API_KEY,
+            base_url=GROQ_BASE_URL,
+            timeout=GROQ_REQUEST_TIMEOUT_SECONDS,
+            max_retries=1,
+        )
+    if provider != "ollama":
+        raise RuntimeError(f"Unsupported LLM provider: {provider}")
+    return ChatOllama(model=LLM_MODEL, base_url=OLLAMA_BASE_URL, temperature=LLM_TEMPERATURE)
+
+
+def _preferred_llm_providers() -> list[str]:
+    if _groq_enabled():
+        if _ollama_reachable():
+            return ["groq", "ollama"]
+        return ["groq"]
+    return ["ollama"]
+
+
+def _validate_groq_base_url() -> None:
+    parsed = urlparse(GROQ_BASE_URL)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise RuntimeError(
+            "Invalid GROQ_BASE_URL. Expected an OpenAI-compatible API base URL, "
+            "for example: https://api.groq.com/openai/v1"
+        )
+    if "console.groq.com" in parsed.netloc:
+        raise RuntimeError(
+            "GROQ_BASE_URL points to Groq Console, not the API endpoint. "
+            "Use: https://api.groq.com/openai/v1"
+        )
+    if "/openai/v1" not in parsed.path:
+        raise RuntimeError(
+            "GROQ_BASE_URL must include '/openai/v1'. "
+            "Use: https://api.groq.com/openai/v1"
+        )
+
+
+def _ollama_reachable(timeout_seconds: float = 1.0) -> bool:
+    health_url = OLLAMA_BASE_URL.rstrip("/") + "/"
+    try:
+        with urlopen(health_url, timeout=timeout_seconds) as response:  # nosec B310
+            return 200 <= response.status < 500
+    except (URLError, TimeoutError, OSError):
+        return False
+
+
+def _invoke_with_provider_failover(context: str, question: str) -> str:
+    prompt = _build_qa_chain()
+    payload = {"context": context, "question": question}
+    failures = []
+
+    for provider in _preferred_llm_providers():
+        try:
+            llm = _create_llm_client(provider)
+            chain = prompt | llm | StrOutputParser()
+            if provider == "groq":
+                logger.info("Using Groq cloud LLM provider.")
+            return chain.invoke(payload)
+        except Exception as exc:
+            failures.append((provider, str(exc)))
+            logger.warning("LLM provider '%s' failed; trying fallback. Error: %s", provider, exc)
+
+    details = "; ".join(f"{provider}={error}" for provider, error in failures) or "unknown error"
+    raise RuntimeError(f"All LLM providers failed: {details}")
+
+
+def _stream_with_provider_failover(context: str, question: str):
+    prompt = _build_qa_chain()
+    payload = {"context": context, "question": question}
+    providers = _preferred_llm_providers()
+    failures = []
+
+    for index, provider in enumerate(providers):
+        emitted = False
+        try:
+            llm = _create_llm_client(provider)
+            chain = prompt | llm | StrOutputParser()
+            if provider == "groq":
+                logger.info("Using Groq cloud LLM provider for streaming.")
+            for chunk in chain.stream(payload):
+                emitted = True
+                yield chunk
+            return
+        except Exception as exc:
+            failures.append((provider, str(exc)))
+            can_fallback = index < len(providers) - 1 and not emitted
+            if can_fallback:
+                logger.warning(
+                    "Streaming LLM provider '%s' failed before output; trying fallback. Error: %s",
+                    provider,
+                    exc,
+                )
+                continue
+            logger.error("Streaming LLM provider '%s' failed: %s", provider, exc)
+            raise
+
+    details = "; ".join(f"{provider}={error}" for provider, error in failures) or "unknown error"
+    raise RuntimeError(f"All streaming LLM providers failed: {details}")
 
 
 def get_optimized_response(question: str) -> str:
@@ -574,8 +711,7 @@ def get_optimized_response(question: str) -> str:
     if not docs:
         return INSUFFICIENT_CONTEXT_MESSAGE
     context = "\n\n".join(doc.page_content for doc in docs)
-    chain = _build_qa_chain()
-    return chain.invoke({"context": context, "question": question})
+    return _invoke_with_provider_failover(context=context, question=question)
 
 
 def stream_optimized_response(question: str):
@@ -584,6 +720,12 @@ def stream_optimized_response(question: str):
         yield INSUFFICIENT_CONTEXT_MESSAGE
         return
     context = "\n\n".join(doc.page_content for doc in docs)
-    chain = _build_qa_chain()
-    for chunk in chain.stream({"context": context, "question": question}):
+    for chunk in _stream_with_provider_failover(context=context, question=question):
         yield chunk
+
+
+def get_retriever():
+    store = get_vector_store()
+    if not store:
+        return None
+    return store.as_retriever(search_kwargs={"k": TOP_K})

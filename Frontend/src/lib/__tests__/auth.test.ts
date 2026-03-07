@@ -19,15 +19,15 @@ describe("authStorage", () => {
     expect(authStorage.getTokens()).toEqual({ access: "a", refresh: "r" });
   });
 
-  it("clearAll removes persisted auth and chat keys", () => {
+  it("clearAll removes auth keys but keeps chat history", () => {
     authStorage.setUser({ id: 1, email: "user@example.com", name: "User" });
     authStorage.setTokens({ access: "a", refresh: "r" });
-    localStorage.setItem("rag_chats", "[]");
+    localStorage.setItem("rag_chat_state", "{\"state\":{\"chats\":[{\"id\":\"1\",\"title\":\"Saved\",\"messages\":[]}],\"activeChatId\":\"1\"},\"version\":0}");
 
     authStorage.clearAll();
 
     expect(authStorage.getUser()).toBeNull();
     expect(authStorage.getTokens()).toBeNull();
-    expect(localStorage.getItem("rag_chats")).toBeNull();
+    expect(localStorage.getItem("rag_chat_state")).not.toBeNull();
   });
 });
