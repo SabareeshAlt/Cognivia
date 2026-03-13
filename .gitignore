@@ -2,3 +2,18 @@
 .env.*
 Frontend/.env
 Frontend/.env.*
+
+# macOS / editor / Python runtime artifacts
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# local databases
+db.sqlite3
+
+# frontend generated outputs
+Frontend/node_modules/
+Frontend/dist/
+Frontend/coverage/
+Frontend/playwright-report/
+Frontend/test-results/
