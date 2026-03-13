@@ -125,7 +125,7 @@ const ChatPage = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [deleteChatId, setDeleteChatId] = useState<string | null>(null);
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [isInternetOffline, setIsInternetOffline] = useState(!navigator.onLine);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const chats = useChatStore((state) => state.chats);
@@ -164,8 +164,8 @@ const ChatPage = () => {
   }, [activeChatId, createChat, navigate]);
 
   useEffect(() => {
-    const onOnline = () => setIsOffline(false);
-    const onOffline = () => setIsOffline(true);
+    const onOnline = () => setIsInternetOffline(false);
+    const onOffline = () => setIsInternetOffline(true);
 
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
@@ -235,16 +235,6 @@ const ChatPage = () => {
 
     appendMessage(activeChatId, { id: Date.now().toString(), role: "user", content: currentInput });
     updateTitleIfNew(activeChatId, currentInput);
-
-    if (isOffline) {
-      appendMessage(activeChatId, {
-        id: `${Date.now()}-offline`,
-        role: "assistant",
-        content: "⚠️ You appear to be offline. Reconnect and try again.",
-      });
-      setIsLoading(false);
-      return;
-    }
 
     const botMsgId = `${Date.now()}-assistant`;
     appendMessage(activeChatId, { id: botMsgId, role: "assistant", content: "" });
@@ -410,11 +400,11 @@ const ChatPage = () => {
           </div>
         )}
 
-        {(isOffline || !config.featureFlags.chatEnabled) && (
+        {(isInternetOffline || !config.featureFlags.chatEnabled) && (
           <div className="mx-6 mt-4 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
             <AlertTriangle size={16} />
-            {isOffline
-              ? "Offline mode: requests are paused until your connection is restored."
+            {isInternetOffline
+              ? "Internet appears offline. AcademeRAG requests can still work until you're back online"
               : "Chat is disabled by feature flag kill-switch."}
           </div>
         )}
@@ -480,7 +470,7 @@ const ChatPage = () => {
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 placeholder={config.featureFlags.chatEnabled ? "Ask about your documents..." : "Chat temporarily disabled"}
-                disabled={!config.featureFlags.chatEnabled || isOffline}
+                disabled={!config.featureFlags.chatEnabled}
                 className="flex-1 bg-transparent px-6 py-4 text-base text-foreground placeholder:text-muted-foreground outline-none"
                 aria-label="Ask a question"
               />
@@ -499,9 +489,9 @@ const ChatPage = () => {
               )}
               <button
                 type="submit"
-                disabled={!input.trim() || !config.featureFlags.chatEnabled || isOffline}
+                disabled={!input.trim() || !config.featureFlags.chatEnabled}
                 className={`rounded-full p-4 text-primary-foreground transition-all hover:scale-105 ${
-                  !input.trim() || !config.featureFlags.chatEnabled || isOffline
+                  !input.trim() || !config.featureFlags.chatEnabled
                     ? "cursor-not-allowed bg-muted"
                     : "bg-gradient-to-r from-primary to-primary/80 shadow-lg"
                 }`}

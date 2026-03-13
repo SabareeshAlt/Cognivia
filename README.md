@@ -1,13 +1,14 @@
 # AcademeRAG-Final
 
-AcademeRAG-Final is a full-stack Retrieval-Augmented Generation (RAG) platform for academic question answering. It combines a Django API backend, a React/Vite frontend, and a Milvus-based retrieval layer with provider-routed LLM generation (Groq cloud and local Ollama fallback).
+AcademeRAG-Final is a full-stack Retrieval-Augmented Generation (RAG) platform for academic question answering. It combines a Django API backend, a React/Vite frontend, and a Milvus-based retrieval layer with provider-routed LLM generation. The current implementation is local-first for reliability, supports full offline operation on the local machine, and prefers Groq for answer generation when online.
 
 ## What This Project Does
 
 - Authenticates users with JWT access/refresh tokens.
 - Accepts user questions through REST and streaming endpoints.
-- Retrieves relevant document chunks from Milvus/Zilliz before generation.
-- Generates grounded responses with Groq-first routing and optional local Ollama fallback.
+- Retrieves relevant document chunks from Milvus/Zilliz when available, with an improved local fallback retriever when cloud retrieval is unavailable.
+- Generates grounded responses with Groq-first routing and local Ollama fallback.
+- Supports syllabus/unit-wise extraction directly from uploaded PDFs for long academic syllabus queries.
 - Exposes health, readiness, metrics, and admin diagnostics endpoints.
 
 ## Current Stack
@@ -37,8 +38,9 @@ AcademeRAG-Final is a full-stack Retrieval-Augmented Generation (RAG) platform f
 2. Frontend stores tokens and sends authenticated requests.
 3. `/api/ask/` or `/api/ask/stream/` receives question.
 4. Backend loads retrieval/generation functions from `Milvus.py` lazily.
-5. Retrieval fetches relevant chunks from vector store.
-6. Generation composes final answer and returns JSON or stream chunks.
+5. Retrieval tries Milvus Cloud first when healthy; otherwise it routes to the cached local fallback retriever.
+6. Syllabus/unit-wise queries can bypass the LLM and return cleaned text extracted directly from the PDF pages.
+7. Generation composes final answer and returns JSON or stream chunks.
 
 ## Environment Configuration
 
@@ -57,6 +59,11 @@ Core variables include:
 - `ACADEMERAG_GROQ_TIMEOUT_SECONDS`
 - `ACADEMERAG_MILVUS_URI`, `ACADEMERAG_MILVUS_TOKEN`, `COLLECTION_NAME`
 - `EMBEDDING_MODEL`, `ACADEMERAG_LLM_MODEL`, `ACADEMERAG_TOP_K`
+- `ACADEMERAG_MILVUS_TIMEOUT_SECONDS`
+- `ACADEMERAG_MILVUS_INIT_TIMEOUT_SECONDS`
+- `ACADEMERAG_MILVUS_HEALTHCHECK_TIMEOUT_SECONDS`
+- `ACADEMERAG_MILVUS_CIRCUIT_BREAKER_SECONDS`
+- `CHUNK_SIZE`, `CHUNK_OVERLAP`
 
 Use `.env.example` as the reference template.
 
@@ -117,12 +124,44 @@ python3 setup_milvus.py
 - Sending a new message while streaming interrupts the in-flight response and starts the new request.
 - Assistant messages are rendered as sanitized markdown (headings, lists, code blocks, links, inline emphasis).
 - Chat threads persist across logout/login on the same browser profile.
+- Chat input is no longer blocked just because the browser reports offline; local backend usage is still allowed when the machine is offline.
+- Ordered lists in markdown continue sequential numbering across adjacent list blocks.
+- Paragraph-style answers preserve visible paragraph separation.
 
 ## LLM Routing
 
 - `ACADEMERAG_LLM_PROVIDER=groq` routes generation to Groq first.
 - If Groq is enabled and unavailable, fallback to Ollama occurs only when Ollama is reachable.
 - `GROQ_BASE_URL` must be the API endpoint (`https://api.groq.com/openai/v1`), not the Groq Console URL.
+- Groq reachability is handled during the actual generation request; the backend no longer pre-probes `/models` before answering.
+
+## Retrieval Behavior
+
+- Online retrieval uses Milvus/Zilliz when the cloud endpoint is healthy.
+- Offline retrieval uses the local cached fallback retriever over the PDF corpus.
+- The fallback retriever is BM25-style over cached PDF chunks and is substantially stronger than a simple token-overlap fallback.
+- Page-aware metadata is preserved for locally parsed PDFs.
+- Neighbor chunk expansion is used to retain continuity for multi-part answers.
+- Syllabus and unit-wise queries use a dedicated extraction path to reduce summarization loss and incomplete answers.
+
+## Offline and Online Modes
+
+- Offline:
+  - frontend remains usable
+  - retrieval uses the local PDF corpus
+  - generation uses local Ollama when available
+- Online:
+  - Groq is preferred for answer generation
+  - Milvus Cloud is preferred for retrieval when healthy
+  - local retrieval remains the automatic backup path if cloud retrieval is unhealthy
+
+## Milvus Failover and Performance Controls
+
+- Milvus reachability is checked with a short health check before expensive sync work starts.
+- Milvus initialization timeout is lower than the previous implementation to fail fast when the endpoint is unreachable.
+- A circuit breaker suppresses repeated slow cloud retries when Milvus is temporarily unhealthy.
+- Local corpus parsing/chunking is cached and refreshed in the background where possible to keep request latency down.
+- Collection lifecycle handling now waits for collection drop/create visibility before use, which stabilizes Zilliz Cloud rebuilds.
 
 ## API Endpoints
 
@@ -202,6 +241,24 @@ Security workflow (`.github/workflows/security-supply-chain.yml`) enforces:
 - Added Groq/Ollama-aware readiness reporting in `api/views.py`.
 - Added streaming interruption controls and markdown rendering in `Frontend/src/pages/ChatPage.tsx`.
 - Fixed chat thread persistence across auth flows by preserving persisted chat state.
+- Removed the frontend hard block on offline browser mode so localhost usage still works without internet.
+- Improved local retrieval with a BM25-style cached fallback retriever over PDF chunks.
+- Added page-aware PDF metadata and neighbor-chunk expansion to improve long-answer continuity.
+- Added syllabus/unit query extraction directly from PDF page text to avoid LLM truncation on long syllabus responses.
+- Cleaned syllabus extraction output to strip page headers, textbook/reference sections, and similar non-syllabus noise.
+- Fixed stale `Milvus.py` function caching in `api/views.py` so backend code changes are picked up reliably.
+- Added fast Milvus health checks, reduced slow cloud retry behavior, and added a circuit breaker for unhealthy Milvus periods.
+- Removed the Groq `/models` pre-probe and now handle Groq availability by standard request exception flow.
+- Stabilized Milvus Cloud collection rebuilds by waiting for drop/create visibility before reuse.
+- Fixed markdown ordered-list numbering so adjacent ordered lists continue sequentially in the frontend.
+- Fixed paragraph rendering so plain-text multi-paragraph responses keep visible paragraph breaks in chat.
+
+## Operational Notes
+
+- Full offline usage still requires the local backend and Ollama stack to be running.
+- Online mode does not guarantee Milvus Cloud retrieval unless the configured Zilliz endpoint is healthy.
+- Syllabus extraction is deterministic for syllabus/unit-style queries and is intended to return source text from the uploaded PDFs rather than generalized summaries.
+- For current local development, restart the backend after changing `Milvus.py` so any long-running process drops stale in-memory state immediately.
 
 ## Enhancement Opportunities (Deep-Dive)
 

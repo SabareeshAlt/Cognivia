@@ -4,6 +4,7 @@ import sys
 import os
 import time
 import threading
+import importlib
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -28,6 +29,7 @@ _stream_fn = None
 _response_fn = None
 _vector_store_fn = None
 _diagnostics_fn = None
+_rag_module_mtime = None
 _vector_ready_cache = {
     "ready": False,
     "inflight": False,
@@ -39,22 +41,24 @@ _vector_ready_lock = threading.Lock()
 
 def _load_rag_modules():
     """Lazy-load RAG modules so Django startup doesn't crash."""
-    global _rag_modules_loaded, _stream_fn, _response_fn, _vector_store_fn, _diagnostics_fn
-    if _rag_modules_loaded:
+    global _rag_modules_loaded, _stream_fn, _response_fn, _vector_store_fn, _diagnostics_fn, _rag_module_mtime
+
+    milvus_path = os.path.join(parent_dir, "Milvus.py")
+    current_mtime = os.path.getmtime(milvus_path) if os.path.exists(milvus_path) else None
+    if _rag_modules_loaded and _rag_module_mtime == current_mtime:
         return
 
     try:
-        from Milvus import (
-            stream_optimized_response,
-            get_optimized_response,
-            get_vector_store,
-            get_retrieval_diagnostics,
-        )
-        _stream_fn = stream_optimized_response
-        _response_fn = get_optimized_response
-        _vector_store_fn = get_vector_store
-        _diagnostics_fn = get_retrieval_diagnostics
+        milvus_module = importlib.import_module("Milvus")
+        if _rag_modules_loaded:
+            milvus_module = importlib.reload(milvus_module)
+
+        _stream_fn = milvus_module.stream_optimized_response
+        _response_fn = milvus_module.get_optimized_response
+        _vector_store_fn = milvus_module.get_vector_store
+        _diagnostics_fn = milvus_module.get_retrieval_diagnostics
         _rag_modules_loaded = True
+        _rag_module_mtime = current_mtime
         logger.info("✅ RAG modules loaded successfully")
     except Exception as e:
         logger.error(f"❌ Failed to load RAG modules: {e}")

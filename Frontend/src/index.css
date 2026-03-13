@@ -79,6 +79,43 @@
   .shadow-elevated {
     box-shadow: var(--elevation-shadow);
   }
+
+  .markdown-content {
+    counter-reset: markdown-ordered-items;
+  }
+
+  .markdown-content p {
+    white-space: pre-wrap;
+  }
+
+  .markdown-content p + p {
+    margin-top: 1rem;
+  }
+
+  .markdown-content > ol {
+    list-style: none;
+    margin-left: 0;
+    padding-left: 0;
+  }
+
+  .markdown-content > ol > li {
+    counter-increment: markdown-ordered-items;
+    padding-left: 2rem;
+    position: relative;
+  }
+
+  .markdown-content > ol > li::before {
+    content: counter(markdown-ordered-items) ".";
+    font-weight: 600;
+    left: 0;
+    position: absolute;
+  }
+
+  .markdown-content ol ol {
+    list-style: decimal;
+    margin-left: 0;
+    padding-left: 1.5rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
