@@ -30,7 +30,52 @@ function renderInlineMarkdown(input: string): string {
   return text;
 }
 
-function markdownToSafeHtml(input: string): string {
+function stripSubjectCodes(input: string): string {
+  return input
+    .replace(/\b\d{2,}[A-Z]{2,}\d{2,}[A-Z]?\b/g, " ")
+    .replace(/\b[A-Z]{2,}\d{3,}[A-Z]?\b/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function isLikelyCourseCatalogLine(input: string): boolean {
+  const text = input.trim();
+  if (!text) return false;
+  const numberTokens = (text.match(/\b\d{1,3}\b/g) || []).length;
+  const titleCaseWords = (text.match(/\b[A-Z][a-zA-Z]+\b/g) || []).length;
+  const hasCodeLikeToken = /\b(?:\d{2,}[A-Z]{2,}\d{2,}[A-Z]?|[A-Z]{2,}\d{3,}[A-Z]?)\b/.test(text);
+  return hasCodeLikeToken || (numberTokens >= 2 && titleCaseWords >= 2);
+}
+
+function stripNumericNoise(input: string): string {
+  let text = input.trim();
+  // Remove repeated list/index prefixes like "1 1 ...", "1 21 ...", "2) 2) ..."
+  text = text.replace(/^(?:(?:\d+|[ivxlcdm]+)\s*[.):-]?\s+){1,4}/i, "");
+  if (isLikelyCourseCatalogLine(text)) {
+    text = text.replace(/\b\d{1,3}\b/g, " ");
+  }
+  return text.replace(/\s{2,}/g, " ").trim();
+}
+
+function normalizeAssistantListItem(input: string): string {
+  let text = input.trim();
+  text = stripNumericNoise(text);
+  // Remove semester prefixes when user asks for subject names only.
+  text = text.replace(/^(?:semester|sem)\s*(?:no\.?|number)?\s*(?:\d+|[ivxlcdm]+)\s*[:\-]\s*/i, "");
+  text = stripSubjectCodes(text);
+  text = stripNumericNoise(text);
+  return text;
+}
+
+function normalizeAssistantParagraph(input: string): string {
+  let text = input.trim();
+  text = text.replace(/^(?:semester|sem)\s*(?:no\.?|number)?\s*(?:\d+|[ivxlcdm]+)\s*[:\-]\s*/i, "");
+  text = stripSubjectCodes(text);
+  text = stripNumericNoise(text);
+  return text;
+}
+
+export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): string {
   const lines = input.split("\n");
   const chunks: string[] = [];
   let inCodeBlock = false;
@@ -89,7 +134,12 @@ function markdownToSafeHtml(input: string): string {
         chunks.push("<ol>");
         listMode = "ol";
       }
-      chunks.push(`<li>${renderInlineMarkdown(line.replace(/^\d+\.\s+/, ""))}</li>`);
+      const itemText = cleanAcademicNoise
+        ? normalizeAssistantListItem(line.replace(/^\d+\.\s+/, ""))
+        : line.replace(/^\d+\.\s+/, "").trim();
+      if (itemText) {
+        chunks.push(`<li>${renderInlineMarkdown(itemText)}</li>`);
+      }
       continue;
     }
 
@@ -99,12 +149,20 @@ function markdownToSafeHtml(input: string): string {
         chunks.push("<ul>");
         listMode = "ul";
       }
-      chunks.push(`<li>${renderInlineMarkdown(line.replace(/^[-*]\s+/, ""))}</li>`);
+      const itemText = cleanAcademicNoise
+        ? normalizeAssistantListItem(line.replace(/^[-*]\s+/, ""))
+        : line.replace(/^[-*]\s+/, "").trim();
+      if (itemText) {
+        chunks.push(`<li>${renderInlineMarkdown(itemText)}</li>`);
+      }
       continue;
     }
 
     closeListIfOpen();
-    chunks.push(`<p>${renderInlineMarkdown(line)}</p>`);
+    const paragraphText = cleanAcademicNoise ? normalizeAssistantParagraph(line) : line.trim();
+    if (paragraphText) {
+      chunks.push(`<p>${renderInlineMarkdown(paragraphText)}</p>`);
+    }
   }
 
   if (inCodeBlock && codeBuffer.length) {
@@ -139,6 +197,7 @@ const ChatPage = () => {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const scrollRafRef = useRef<number | null>(null);
   const streamReaderRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
@@ -204,6 +263,13 @@ const ChatPage = () => {
       scrollRafRef.current = null;
     });
   }, [activeChat?.messages, isLoading]);
+
+  useEffect(() => {
+    const composer = composerRef.current;
+    if (!composer) return;
+    composer.style.height = "auto";
+    composer.style.height = `${Math.min(composer.scrollHeight, 220)}px`;
+  }, [input]);
 
   const handleNewChat = () => {
     createChat();
@@ -437,7 +503,7 @@ const ChatPage = () => {
                 >
                   <div
                     className="markdown-content text-inherit [&_a]:underline [&_a]:decoration-current [&_a:hover]:opacity-80 [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/10 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_h1]:mb-3 [&_h1]:mt-1 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:mt-1 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:mt-1 [&_h3]:text-base [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-6"
-                    dangerouslySetInnerHTML={{ __html: markdownToSafeHtml(msg.content) }}
+                    dangerouslySetInnerHTML={{ __html: markdownToSafeHtml(msg.content, msg.role === "assistant") }}
                   />
                 </div>
               </div>
@@ -465,13 +531,20 @@ const ChatPage = () => {
               onSubmit={handleSend}
               className="flex items-center gap-4 rounded-full border border-border bg-card p-2 shadow-elevated transition-all focus-within:ring-2 focus-within:ring-ring"
             >
-              <input
-                type="text"
+              <textarea
+                ref={composerRef}
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void handleSend();
+                  }
+                }}
                 placeholder={config.featureFlags.chatEnabled ? "Ask about your documents..." : "Chat temporarily disabled"}
                 disabled={!config.featureFlags.chatEnabled}
-                className="flex-1 bg-transparent px-6 py-4 text-base text-foreground placeholder:text-muted-foreground outline-none"
+                rows={1}
+                className="flex-1 resize-none overflow-y-auto overflow-x-hidden bg-transparent px-6 py-4 text-base text-foreground placeholder:text-muted-foreground outline-none"
                 aria-label="Ask a question"
               />
               {isLoading && (
@@ -534,3 +607,4 @@ const ChatPage = () => {
 };
 
 export default ChatPage;
+

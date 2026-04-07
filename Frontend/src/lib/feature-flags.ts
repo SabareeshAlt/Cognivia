@@ -7,10 +7,11 @@ export interface FeatureFlags {
   canaryUser: boolean;
 }
 
-function parseBool(value: string): boolean {
+function parseBool(value: string, fallback: boolean): boolean {
   const normalized = value.trim().toLowerCase();
   if (!["true", "false", "1", "0", "yes", "no", "on", "off"].includes(normalized)) {
-    throw new Error(`Invalid boolean flag value: ${value}`);
+    console.warn(`[feature-flags] Invalid boolean flag value: ${value}. Using fallback: ${fallback}`);
+    return fallback;
   }
   return ["true", "1", "yes", "on"].includes(normalized);
 }
@@ -30,19 +31,36 @@ function canaryEnabled(canaryPercent: number): boolean {
   return deterministicBucket(seed) < canaryPercent;
 }
 
+function readOverrides(): Partial<FeatureFlags> {
+  const overrideRaw = localStorage.getItem("rag_feature_overrides");
+  if (!overrideRaw) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(overrideRaw) as unknown;
+    if (parsed && typeof parsed === "object") {
+      return parsed as Partial<FeatureFlags>;
+    }
+  } catch {
+    console.warn("[feature-flags] Ignoring invalid localStorage override payload");
+  }
+
+  return {};
+}
+
 export function resolveFeatureFlags(config: {
   chatDisabled: boolean;
   canaryPercent: number;
   enhancedStreaming: string;
   diagnosticsPanel: string;
 }): FeatureFlags {
-  const overrideRaw = localStorage.getItem("rag_feature_overrides");
-  const override = overrideRaw ? (JSON.parse(overrideRaw) as Partial<FeatureFlags>) : {};
+  const override = readOverrides();
 
   const computed: FeatureFlags = {
     chatEnabled: !config.chatDisabled,
-    enhancedStreaming: parseBool(config.enhancedStreaming),
-    diagnosticsPanel: parseBool(config.diagnosticsPanel),
+    enhancedStreaming: parseBool(config.enhancedStreaming, true),
+    diagnosticsPanel: parseBool(config.diagnosticsPanel, false),
     canaryUser: canaryEnabled(config.canaryPercent),
   };
 

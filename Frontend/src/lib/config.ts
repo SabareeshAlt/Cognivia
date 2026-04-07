@@ -1,28 +1,6 @@
 import { resolveFeatureFlags } from "@/lib/feature-flags";
 
-function requiredEnv(name: string): string {
-  const value = import.meta.env[name];
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value.trim();
-}
-
-function requiredBooleanEnv(name: string): boolean {
-  const value = requiredEnv(name).toLowerCase();
-  if (!["true", "false", "1", "0", "yes", "no", "on", "off"].includes(value)) {
-    throw new Error(`Invalid boolean environment variable: ${name}`);
-  }
-  return ["true", "1", "yes", "on"].includes(value);
-}
-
-function requiredIntEnv(name: string): number {
-  const value = Number.parseInt(requiredEnv(name), 10);
-  if (Number.isNaN(value)) {
-    throw new Error(`Invalid integer environment variable: ${name}`);
-  }
-  return value;
-}
+const LOCAL_BACKEND_PORTS = [8000, 8001, 8002, 8003, 8004, 8005];
 
 function optionalEnv(name: string): string | null {
   const value = import.meta.env[name];
@@ -35,6 +13,32 @@ function optionalEnv(name: string): string | null {
 
 function stripTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
+}
+
+function boolEnvWithDefault(name: string, fallback: boolean): boolean {
+  const raw = optionalEnv(name);
+  if (!raw) {
+    return fallback;
+  }
+  const value = raw.toLowerCase();
+  if (!["true", "false", "1", "0", "yes", "no", "on", "off"].includes(value)) {
+    console.warn(`[config] Invalid boolean environment variable: ${name}. Using fallback: ${fallback}`);
+    return fallback;
+  }
+  return ["true", "1", "yes", "on"].includes(value);
+}
+
+function intEnvWithDefault(name: string, fallback: number): number {
+  const raw = optionalEnv(name);
+  if (!raw) {
+    return fallback;
+  }
+  const value = Number.parseInt(raw, 10);
+  if (Number.isNaN(value)) {
+    console.warn(`[config] Invalid integer environment variable: ${name}. Using fallback: ${fallback}`);
+    return fallback;
+  }
+  return value;
 }
 
 function resolveApiBaseUrl(): string {
@@ -50,8 +54,11 @@ function resolveApiBaseUrl(): string {
     }
 
     const { protocol, hostname, origin, port } = window.location;
-    if ((hostname === "127.0.0.1" || hostname === "localhost") && (port === "5173" || port === "4173")) {
-      return `${protocol}//${hostname}:8000`;
+    if (hostname === "127.0.0.1" || hostname === "localhost") {
+      const currentPort = Number.parseInt(port, 10);
+      if (Number.isNaN(currentPort) || !LOCAL_BACKEND_PORTS.includes(currentPort)) {
+        return `${protocol}//${hostname}:8000`;
+      }
     }
     return stripTrailingSlash(origin);
   }
@@ -59,23 +66,11 @@ function resolveApiBaseUrl(): string {
   return "http://127.0.0.1:8000";
 }
 
-function intEnvWithDefault(name: string, fallback: number): number {
-  const raw = optionalEnv(name);
-  if (!raw) {
-    return fallback;
-  }
-  const value = Number.parseInt(raw, 10);
-  if (Number.isNaN(value)) {
-    throw new Error(`Invalid integer environment variable: ${name}`);
-  }
-  return value;
-}
-
 const apiBaseUrl = resolveApiBaseUrl();
-const chatDisabled = requiredBooleanEnv("VITE_CHAT_DISABLED");
-const canaryPercent = requiredIntEnv("VITE_CANARY_PERCENT");
+const chatDisabled = boolEnvWithDefault("VITE_CHAT_DISABLED", false);
+const canaryPercent = Math.max(0, Math.min(100, intEnvWithDefault("VITE_CANARY_PERCENT", 100)));
 const requestTimeoutMs = Math.max(intEnvWithDefault("VITE_API_TIMEOUT_MS", 30_000), 1_000);
-const maxJsBundleKb = requiredIntEnv("VITE_MAX_JS_BUNDLE_KB");
+const maxJsBundleKb = Math.max(intEnvWithDefault("VITE_MAX_JS_BUNDLE_KB", 600), 100);
 
 export const config = {
   apiBaseUrl,
@@ -85,7 +80,7 @@ export const config = {
   featureFlags: resolveFeatureFlags({
     chatDisabled,
     canaryPercent,
-    enhancedStreaming: requiredEnv("VITE_FEATURE_ENHANCED_STREAMING"),
-    diagnosticsPanel: requiredEnv("VITE_FEATURE_DIAGNOSTICS_PANEL"),
+    enhancedStreaming: optionalEnv("VITE_FEATURE_ENHANCED_STREAMING") ?? "true",
+    diagnosticsPanel: optionalEnv("VITE_FEATURE_DIAGNOSTICS_PANEL") ?? "false",
   }),
 };

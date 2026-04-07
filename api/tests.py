@@ -257,3 +257,54 @@ class RetrievalBehaviorTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
         self.assertIn("trace_id", response.json())
+
+@skipUnless(SIMPLEJWT_AVAILABLE, "simplejwt dependency not installed")
+class DependencyFailureTests(TestCase):
+    def _auth_header(self) -> str:
+        self.client.post(
+            reverse("auth_register"),
+            data=json.dumps({"email": "dep@example.com", "password": "Secure123!", "name": "Dep"}),
+            content_type="application/json",
+        )
+        login_resp = self.client.post(
+            reverse("auth_login"),
+            data=json.dumps({"email": "dep@example.com", "password": "Secure123!"}),
+            content_type="application/json",
+        )
+        return f"Bearer {login_resp.json()['tokens']['access']}"
+
+    @patch("api.views._load_rag_modules")
+    @patch("api.views._response_fn", autospec=False)
+    def test_ask_returns_503_when_llm_connection_refused(self, mock_response_fn, mock_loader):
+        mock_loader.return_value = None
+        mock_response_fn.side_effect = RuntimeError("[WinError 10061] No connection could be made because the target machine actively refused it")
+
+        response = self.client.post(
+            reverse("ask_question"),
+            data=json.dumps({"question": "Test question"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=self._auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 503)
+        payload = response.json()
+        self.assertIn("LLM dependency is unreachable", payload["error"])
+        self.assertIn("trace_id", payload)
+
+    @patch("api.views._load_rag_modules")
+    @patch("api.views._response_fn", autospec=False)
+    def test_ask_hides_internal_error_details(self, mock_response_fn, mock_loader):
+        mock_loader.return_value = None
+        mock_response_fn.side_effect = RuntimeError("Sensitive internal stack details")
+
+        response = self.client.post(
+            reverse("ask_question"),
+            data=json.dumps({"question": "Test question"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=self._auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 500)
+        payload = response.json()
+        self.assertEqual(payload["error"], "Failed to process the question due to an internal dependency error.")
+        self.assertNotIn("Sensitive internal stack details", payload["error"])

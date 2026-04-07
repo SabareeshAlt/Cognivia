@@ -1,7 +1,7 @@
 import json
 import logging
-import sys
 import os
+import sys
 import time
 import threading
 import importlib
@@ -15,7 +15,6 @@ from .rate_limit import ratelimit
 from .responses import json_error
 from .metrics import render_prometheus
 
-# Path fix to find Milvus.py in root
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
@@ -23,7 +22,6 @@ if parent_dir not in sys.path:
 
 logger = logging.getLogger(__name__)
 
-# Lazy imports to avoid crashing Django startup if Milvus/Ollama is not ready
 _rag_modules_loaded = False
 _stream_fn = None
 _response_fn = None
@@ -59,10 +57,44 @@ def _load_rag_modules():
         _diagnostics_fn = milvus_module.get_retrieval_diagnostics
         _rag_modules_loaded = True
         _rag_module_mtime = current_mtime
-        logger.info("✅ RAG modules loaded successfully")
-    except Exception as e:
-        logger.error(f"❌ Failed to load RAG modules: {e}")
+        logger.info("RAG modules loaded successfully")
+    except Exception as exc:
+        logger.error("Failed to load RAG modules: %s", exc)
         raise
+
+
+def _classify_runtime_error(exc: Exception) -> tuple[str, int]:
+    raw = str(exc)
+    text = raw.lower()
+
+    connection_refused_patterns = [
+        "winerror 10061",
+        "actively refused",
+        "connection refused",
+        "failed to establish a new connection",
+        "[errno 111]",
+    ]
+
+    if any(pattern in text for pattern in connection_refused_patterns):
+        return (
+            "LLM dependency is unreachable. Start Ollama and ensure OLLAMA_BASE_URL is correct, or configure GROQ cloud fallback.",
+            503,
+        )
+
+    if "all llm providers failed" in text or "ollama" in text and "failed" in text:
+        return (
+            "No available LLM provider. Verify Ollama/Groq configuration and try again.",
+            503,
+        )
+
+    if "timed out" in text or "timeout" in text:
+        return (
+            "Upstream dependency timed out while processing your request. Please retry.",
+            504,
+        )
+
+    return ("Failed to process the question due to an internal dependency error.", 500)
+
 
 def generate_streaming_response(question):
     """Generator that yields data chunks for the frontend."""
@@ -70,9 +102,10 @@ def generate_streaming_response(question):
         _load_rag_modules()
         for chunk in _stream_fn(question):
             yield chunk
-    except Exception as e:
-        logger.error(f"Streaming error: {e}")
-        yield f"\n\n⚠️ Error: {str(e)}"
+    except Exception as exc:
+        logger.error("Streaming error: %s", exc, exc_info=True)
+        safe_message, _ = _classify_runtime_error(exc)
+        yield f"\n\nError: {safe_message}"
 
 
 def _probe_vector_dependencies():
@@ -101,64 +134,71 @@ def _refresh_vector_dependencies_async(min_interval_seconds: float = 10.0):
         _vector_ready_cache["inflight"] = True
     threading.Thread(target=_probe_vector_dependencies, daemon=True).start()
 
+
 @csrf_exempt
 @require_http_methods(["POST"])
 @jwt_required
 @ratelimit(key="ip", rate=getattr(settings, "RATELIMIT_DEFAULT", "30/m"), block=True)
 def ask_question(request):
-    """
-    Handles both /api/ask/ and /api/ask/stream/
-    """
+    """Handles both /api/ask/ and /api/ask/stream/."""
     try:
         data = json.loads(request.body)
-        question = data.get('question', '')
+        question = data.get("question", "")
         request_id = getattr(request, "request_id", "-")
-        
-        # Check if user wants streaming
-        wants_stream = data.get('stream', False) or request.path.endswith('/stream/')
+        wants_stream = data.get("stream", False) or request.path.endswith("/stream/")
 
         if not question:
             return json_error(request, "No question provided", 400)
         if len(question) > settings.MAX_QUESTION_LENGTH:
             return JsonResponse(
                 {
-                    'error': f'Question too long. Max length is {settings.MAX_QUESTION_LENGTH} characters.',
-                    'success': False,
-                    'trace_id': request_id,
+                    "error": f"Question too long. Max length is {settings.MAX_QUESTION_LENGTH} characters.",
+                    "success": False,
+                    "trace_id": request_id,
                 },
                 status=400,
             )
 
-        # Ensure RAG modules are loaded
         try:
             _load_rag_modules()
-        except Exception as e:
-            logger.error(f"RAG module load failed: {e}")
-            return JsonResponse({
-                'error': f'RAG backend initialization failed: {str(e)}',
-                'success': False,
-                'trace_id': request_id,
-            }, status=500)
+        except Exception as exc:
+            logger.error("RAG module load failed: %s", exc, exc_info=True)
+            return JsonResponse(
+                {
+                    "error": "RAG backend initialization failed.",
+                    "details": str(exc),
+                    "success": False,
+                    "trace_id": request_id,
+                },
+                status=500,
+            )
 
         if wants_stream:
             response = StreamingHttpResponse(
                 generate_streaming_response(question),
-                content_type='text/event-stream'
+                content_type="text/event-stream",
             )
-            response['Cache-Control'] = 'no-cache'
-            response['X-Accel-Buffering'] = 'no'
+            response["Cache-Control"] = "no-cache"
+            response["X-Accel-Buffering"] = "no"
             return response
 
-        # Standard Response (Non-streaming)
-        answer = _response_fn(question)
-        return JsonResponse({'answer': answer, 'status': 'success', 'success': True, 'trace_id': request_id})
+        try:
+            answer = _response_fn(question)
+        except Exception as exc:
+            logger.error("Question processing failed: %s", exc, exc_info=True)
+            safe_message, status_code = _classify_runtime_error(exc)
+            return json_error(request, safe_message, status_code)
+
+        return JsonResponse({"answer": answer, "status": "success", "success": True, "trace_id": request_id})
 
     except json.JSONDecodeError:
         logger.error("Invalid JSON in request body")
         return json_error(request, "Invalid JSON in request body", 400)
-    except Exception as e:
-        logger.error(f"ask_question error: {e}", exc_info=True)
-        return json_error(request, str(e), 500)
+    except Exception as exc:
+        logger.error("ask_question error: %s", exc, exc_info=True)
+        safe_message, status_code = _classify_runtime_error(exc)
+        return json_error(request, safe_message, status_code)
+
 
 @require_http_methods(["GET"])
 def health_live(request):
@@ -222,7 +262,6 @@ def health_ready(request):
 
     health_status["llm"] = health_status["groq"] if use_groq else health_status["ollama"]
     if use_groq and not health_status["llm"]:
-        # Support offline mode: if Groq cloud is unavailable, local Ollama keeps service available.
         health_status["llm"] = health_status["ollama"]
 
     elapsed = time.monotonic() - started
@@ -235,17 +274,13 @@ def health_ready(request):
                 health_status["vector_store"] = True
                 health_status["milvus_cloud"] = True
             elif _vector_ready_cache["last_error"]:
-                logger.warning(f"Readiness check - vector store: {_vector_ready_cache['last_error']}")
+                logger.warning("Readiness check - vector store: %s", _vector_ready_cache["last_error"])
             elif not cache_fresh:
                 logger.warning("Readiness check - vector store status is stale, waiting for refresh.")
     else:
         logger.warning("Readiness check timed out before vector dependency checks.")
 
-    overall = (
-        "healthy"
-        if health_status["django"] and health_status["llm"] and health_status["vector_store"]
-        else "degraded"
-    )
+    overall = "healthy" if health_status["django"] and health_status["llm"] and health_status["vector_store"] else "degraded"
     return JsonResponse({"status": overall, "services": health_status})
 
 

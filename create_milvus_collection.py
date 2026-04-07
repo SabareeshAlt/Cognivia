@@ -12,6 +12,7 @@ from Milvus import (  # noqa: E402
     _get_milvus_config,
     collection_exists,
     compute_rebuild_state,
+    get_retrieval_diagnostics,
     initialize_vector_store,
 )
 
@@ -83,11 +84,57 @@ def main() -> int:
             recreate_collection_on_sync=True,
         )
     if not store:
-        print("Ingestion failed.", file=sys.stderr)
-        return 1
+        diagnostics = get_retrieval_diagnostics()
+        source_rows = diagnostics.get("sources", [])
+        indexed_any = any(isinstance(row.get("milvus_chunks"), int) and row.get("milvus_chunks", 0) > 0 for row in source_rows)
+        if not indexed_any:
+            print("Ingestion failed.", file=sys.stderr)
+            return 1
+        print(
+            "Ingestion completed, but LangChain Milvus wrapper is unavailable in this runtime. "
+            "Direct Milvus client retrieval will be used.",
+            flush=True,
+        )
+        print("Per-source index status:", flush=True)
+        for row in source_rows:
+            source = row.get("source", "unknown")
+            tracked = row.get("tracked")
+            hash_match = row.get("hash_match")
+            milvus_chunks = row.get("milvus_chunks")
+            chunk_text = (
+                str(milvus_chunks)
+                if isinstance(milvus_chunks, int)
+                else f"error={row.get('milvus_count_error') or 'unavailable'}"
+            )
+            print(
+                f"  - {source}: tracked={tracked} hash_match={hash_match} milvus_chunks={chunk_text}",
+                flush=True,
+            )
+        return 0
 
     probe = store.similarity_search("collection validation probe", k=3)
     print(f"Collection ready. Probe returned {len(probe)} results.")
+    try:
+        diagnostics = get_retrieval_diagnostics()
+        source_rows = diagnostics.get("sources", [])
+        if source_rows:
+            print("Per-source index status:", flush=True)
+            for row in source_rows:
+                source = row.get("source", "unknown")
+                tracked = row.get("tracked")
+                hash_match = row.get("hash_match")
+                milvus_chunks = row.get("milvus_chunks")
+                chunk_text = (
+                    str(milvus_chunks)
+                    if isinstance(milvus_chunks, int)
+                    else f"error={row.get('milvus_count_error') or 'unavailable'}"
+                )
+                print(
+                    f"  - {source}: tracked={tracked} hash_match={hash_match} milvus_chunks={chunk_text}",
+                    flush=True,
+                )
+    except Exception as exc:
+        print(f"Warning: source verification failed: {exc}", flush=True)
     return 0
 
 
