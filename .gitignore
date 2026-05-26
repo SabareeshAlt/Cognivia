@@ -17,3 +17,6 @@ Frontend/dist/
 Frontend/coverage/
 Frontend/playwright-report/
 Frontend/test-results/
+
+milvus_local.db
+*.sqlite3

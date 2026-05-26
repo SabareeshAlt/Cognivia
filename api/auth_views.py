@@ -50,6 +50,10 @@ def register(request):
         return json_error(request, "Email and password are required", 400)
     if len(password) < 8:
         return json_error(request, "Password must be at least 8 characters", 400)
+    if not any(char.isdigit() for char in password):
+        return json_error(request, "Password must contain at least one number", 400)
+    if not any(char.isupper() for char in password):
+        return json_error(request, "Password must contain at least one uppercase letter", 400)
     if User.objects.filter(username=email).exists():
         return json_error(request, "User already exists", 409)
 

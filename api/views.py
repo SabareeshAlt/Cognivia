@@ -77,13 +77,13 @@ def _classify_runtime_error(exc: Exception) -> tuple[str, int]:
 
     if any(pattern in text for pattern in connection_refused_patterns):
         return (
-            "LLM dependency is unreachable. Start Ollama and ensure OLLAMA_BASE_URL is correct, or configure GROQ cloud fallback.",
+            "LLM dependency is unreachable. Start Ollama and ensure OLLAMA_BASE_URL is correct.",
             503,
         )
 
-    if "all llm providers failed" in text or "ollama" in text and "failed" in text:
+    if "all llm providers failed" in text or "all streaming llm providers failed" in text or ("ollama" in text and "failed" in text):
         return (
-            "No available LLM provider. Verify Ollama/Groq configuration and try again.",
+            "No available LLM provider. Verify Ollama configuration and try again.",
             503,
         )
 
@@ -166,7 +166,7 @@ def ask_question(request):
             return JsonResponse(
                 {
                     "error": "RAG backend initialization failed.",
-                    "details": str(exc),
+                    "details": "Internal server configuration error",
                     "success": False,
                     "trace_id": request_id,
                 },
@@ -208,6 +208,7 @@ def health_live(request):
 
 @require_http_methods(["GET"])
 @ratelimit(key="ip", rate="60/m", block=True)
+@jwt_required
 def health_ready(request):
     """Readiness probe with dependency checks."""
     started = time.monotonic()
@@ -217,19 +218,11 @@ def health_ready(request):
         "llm": False,
         "llm_provider": "ollama",
         "ollama": False,
-        "groq": False,
         "vector_store": False,
-        "milvus_cloud": False,
     }
 
     provider = os.getenv("ACADEMERAG_LLM_PROVIDER", "ollama").strip().lower()
-    use_groq = provider == "groq" or os.getenv("ACADEMERAG_USE_GROQ_CLOUD", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    health_status["llm_provider"] = "groq" if use_groq else "ollama"
+    health_status["llm_provider"] = "ollama"
 
     try:
         import requests as http_requests
@@ -241,28 +234,7 @@ def health_ready(request):
     except Exception as exc:
         logger.debug("Ollama health probe failed: %s", exc)
 
-    if use_groq:
-        try:
-            import requests as http_requests
-
-            groq_base = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
-            groq_key = os.getenv("GROQ_API_KEY", "").strip()
-            if groq_key:
-                resp = http_requests.get(
-                    f"{groq_base}/models",
-                    headers={"Authorization": f"Bearer {groq_key}"},
-                    timeout=2,
-                )
-                if resp.status_code == 200:
-                    health_status["groq"] = True
-            else:
-                logger.warning("Groq provider configured but GROQ_API_KEY is missing.")
-        except Exception as exc:
-            logger.debug("Groq health probe failed: %s", exc)
-
-    health_status["llm"] = health_status["groq"] if use_groq else health_status["ollama"]
-    if use_groq and not health_status["llm"]:
-        health_status["llm"] = health_status["ollama"]
+    health_status["llm"] = health_status["ollama"]
 
     elapsed = time.monotonic() - started
     if elapsed <= timeout_s:
@@ -272,7 +244,6 @@ def health_ready(request):
             cache_fresh = cache_age <= 15.0
             if cache_fresh and _vector_ready_cache["ready"]:
                 health_status["vector_store"] = True
-                health_status["milvus_cloud"] = True
             elif _vector_ready_cache["last_error"]:
                 logger.warning("Readiness check - vector store: %s", _vector_ready_cache["last_error"])
             elif not cache_fresh:
@@ -286,6 +257,7 @@ def health_ready(request):
 
 @require_http_methods(["GET"])
 @ratelimit(key="ip", rate="60/m", block=True)
+@jwt_required
 def health_check(request):
     """Backward-compatible health alias mapped to readiness checks."""
     return health_ready(request)
@@ -293,6 +265,7 @@ def health_check(request):
 
 @require_http_methods(["GET"])
 @ratelimit(key="ip", rate="120/m", block=True)
+@jwt_required
 def metrics(request):
     body = render_prometheus()
     return HttpResponse(body, content_type="text/plain; version=0.0.4; charset=utf-8")

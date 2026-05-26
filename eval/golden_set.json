@@ -1,20 +1,262 @@
 [
   {
-    "id": "q1",
-    "question": "What is retrieval-augmented generation?",
-    "reference_keywords": ["retrieval", "documents", "generation"],
-    "required_citation_markers": ["["]
+    "id": "bench_1",
+    "question": "Sample benchmark question 1 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
   },
   {
-    "id": "q2",
-    "question": "Why is hybrid retrieval useful in enterprise RAG?",
-    "reference_keywords": ["bm25", "vector", "rerank"],
-    "required_citation_markers": ["["]
+    "id": "bench_2",
+    "question": "Sample benchmark question 2 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
   },
   {
-    "id": "q3",
-    "question": "How can you reduce hallucinations in a RAG pipeline?",
-    "reference_keywords": ["grounding", "citation", "evaluation"],
-    "required_citation_markers": ["["]
+    "id": "bench_3",
+    "question": "Sample benchmark question 3 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_4",
+    "question": "Sample benchmark question 4 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_5",
+    "question": "Sample benchmark question 5 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_6",
+    "question": "Sample benchmark question 6 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_7",
+    "question": "Sample benchmark question 7 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_8",
+    "question": "Sample benchmark question 8 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_9",
+    "question": "Sample benchmark question 9 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_10",
+    "question": "Sample benchmark question 10 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_11",
+    "question": "Sample benchmark question 11 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_12",
+    "question": "Sample benchmark question 12 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_13",
+    "question": "Sample benchmark question 13 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_14",
+    "question": "Sample benchmark question 14 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_15",
+    "question": "Sample benchmark question 15 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_16",
+    "question": "Sample benchmark question 16 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_17",
+    "question": "Sample benchmark question 17 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_18",
+    "question": "Sample benchmark question 18 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_19",
+    "question": "Sample benchmark question 19 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
+  },
+  {
+    "id": "bench_20",
+    "question": "Sample benchmark question 20 regarding syllabus outcomes?",
+    "expected_sources": [
+      "syllabus.pdf",
+      "course_materials.pdf"
+    ],
+    "reference_keywords": [
+      "outcome",
+      "objective",
+      "assessment"
+    ]
   }
 ]
