@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 def _issue_tokens(user):
     if not SIMPLEJWT_AVAILABLE:
         raise RuntimeError("djangorestframework-simplejwt is not installed")
+    if not getattr(user, "is_active", False):
+        raise ValueError("User account is disabled")
     refresh = RefreshToken.for_user(user)
     return {
         "access": str(refresh.access_token),
@@ -33,7 +35,7 @@ def _issue_tokens(user):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@ratelimit(key="ip", rate=getattr(settings, "AUTH_REGISTER_RATELIMIT", "10/m"), block=True)
+@ratelimit(key="ip", rate=getattr(settings, "AUTH_REGISTER_RATELIMIT", "10/m"), block=True, cache="default")
 def register(request):
     if not SIMPLEJWT_AVAILABLE:
         return json_error(request, "Auth dependency missing: djangorestframework-simplejwt", 503)
@@ -76,7 +78,7 @@ def register(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@ratelimit(key="ip", rate=getattr(settings, "AUTH_LOGIN_RATELIMIT", "15/m"), block=True)
+@ratelimit(key="ip", rate=getattr(settings, "AUTH_LOGIN_RATELIMIT", "15/m"), block=True, cache="default")
 def login(request):
     if not SIMPLEJWT_AVAILABLE:
         return json_error(request, "Auth dependency missing: djangorestframework-simplejwt", 503)
@@ -91,6 +93,8 @@ def login(request):
     user = authenticate(request, username=email, password=password)
     if user is None:
         return json_error(request, "Invalid credentials", 401)
+    if not getattr(user, "is_active", False):
+        return json_error(request, "Account is disabled", 403)
 
     tokens = _issue_tokens(user)
     return JsonResponse(
@@ -104,7 +108,7 @@ def login(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@ratelimit(key="ip", rate=getattr(settings, "AUTH_REFRESH_RATELIMIT", "20/m"), block=True)
+@ratelimit(key="ip", rate=getattr(settings, "AUTH_REFRESH_RATELIMIT", "20/m"), block=True, cache="default")
 def refresh(request):
     if not SIMPLEJWT_AVAILABLE:
         return json_error(request, "Auth dependency missing: djangorestframework-simplejwt", 503)
@@ -123,6 +127,8 @@ def refresh(request):
         user = User.objects.filter(id=user_id).first()
         if user is None:
             return json_error(request, "Invalid refresh token", 401)
+        if not getattr(user, "is_active", False):
+            return json_error(request, "Account is disabled", 403)
         new_refresh = RefreshToken.for_user(user)
         # Rotate-safe behavior: invalidate old refresh when blacklist app is enabled.
         try:

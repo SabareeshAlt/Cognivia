@@ -26,10 +26,11 @@ class ApiConfig(AppConfig):
 
         def _warmup_active_stack():
             try:
-                from Milvus import get_retriever
+                from Milvus import get_retriever, preload_cross_encoder
 
                 logger.info("Starting RAG warmup...")
                 get_retriever()
+                preload_cross_encoder()
                 logger.info("RAG warmup completed.")
             except Exception as exc:
                 logger.warning("RAG warmup failed (will initialize lazily): %s", exc)

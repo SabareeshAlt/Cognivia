@@ -7,6 +7,10 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
+PROMETHEUS_MULTIPROC_DIR = os.environ.get('PROMETHEUS_MULTIPROC_DIR', str(BASE_DIR / 'prometheus_multiproc_dir'))
+if not os.path.exists(PROMETHEUS_MULTIPROC_DIR):
+    os.makedirs(PROMETHEUS_MULTIPROC_DIR, exist_ok=True)
+
 
 def env_required(name: str) -> str:
     value = os.getenv(name)
@@ -40,6 +44,9 @@ def env_list(name: str) -> list[str]:
 DEBUG = env_bool("DJANGO_DEBUG")
 SECRET_KEY = env_required("DJANGO_SECRET_KEY")
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
+if "testserver" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("testserver")
+
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -52,9 +59,11 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "api",
+    "django_prometheus",
 ]
 
 MIDDLEWARE = [
+    "django_prometheus.middleware.PrometheusBeforeMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "api.middleware.MetricsMiddleware",
     "corsheaders.middleware.CorsMiddleware",
@@ -65,6 +74,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "api.middleware.RequestIDMiddleware",
+    "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
 ROOT_URLCONF = "rag_project.urls"
@@ -120,6 +130,21 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+    },
+]
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -169,6 +194,20 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True
 X_FRAME_OPTIONS = "DENY"
 
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": os.getenv("REDIS_URL", "redis://redis:6379/1"),
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "IGNORE_EXCEPTIONS": False,
+        }
+    }
+}
+
+RATELIMIT_USE_CACHE = "default"
+RATELIMIT_FAIL_OPEN = False
+
 RATELIMIT_DEFAULT = env_required("RATELIMIT_DEFAULT")
 AUTH_REGISTER_RATELIMIT = env_required("AUTH_REGISTER_RATELIMIT")
 AUTH_LOGIN_RATELIMIT = env_required("AUTH_LOGIN_RATELIMIT")
@@ -186,9 +225,8 @@ LOGGING = {
     "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
-            "()": "api.logging_formatters.SafeRequestFormatter",
-            "format": "[{asctime}] {levelname} {name} request_id={request_id} {message}",
-            "style": "{",
+            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
+            "format": "%(asctime)s %(levelname)s %(name)s %(request_id)s %(message)s",
         },
     },
     "handlers": {

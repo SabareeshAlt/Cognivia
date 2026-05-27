@@ -245,7 +245,7 @@ export const apiClient = {
   },
 
   async askStream(question: string, options?: { signal?: AbortSignal }): Promise<Response> {
-    const streamOpenTimeoutMs = 0;
+    const streamOpenTimeoutMs = 20000;
     let response = await fetchApi(
       "/api/ask/stream/",
       {

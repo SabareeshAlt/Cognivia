@@ -5,6 +5,7 @@ Frontend/.env.*
 
 # macOS / editor / Python runtime artifacts
 .DS_Store
+.venv/
 __pycache__/
 *.py[cod]
 
@@ -20,3 +21,4 @@ Frontend/test-results/
 
 milvus_local.db
 *.sqlite3
+*.pkl

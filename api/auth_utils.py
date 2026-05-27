@@ -37,7 +37,10 @@ def get_user_from_request(request):
         user_id = access.get("user_id")
         if not user_id:
             return None
-        return User.objects.filter(id=user_id).first()
+        user = User.objects.filter(id=user_id).first()
+        if user and not getattr(user, 'is_active', True):
+            return None
+        return user
     except (InvalidToken, TokenError, ValueError):
         return None
 
@@ -55,6 +58,9 @@ def jwt_required(view_func):
         user = get_user_from_request(request)
         if user is None:
             return json_error(request, "Authentication required", 401)
+            
+        if not getattr(user, "is_active", False):
+            return json_error(request, "User account is disabled", 403)
 
         request.user = user
         return view_func(request, *args, **kwargs)

@@ -1,0 +1,156 @@
+[
+  {
+    "id": "syllabus_1",
+    "type": "Syllabus QA",
+    "question": "What is the grading policy for late assignments?",
+    "expected_sources": [
+      "syllabus.pdf"
+    ],
+    "reference_keywords": [
+      "penalty",
+      "late",
+      "deduction",
+      "deadline"
+    ]
+  },
+  {
+    "id": "syllabus_2",
+    "type": "Syllabus QA",
+    "question": "Which professor is teaching the Machine Learning module and what are their office hours?",
+    "expected_sources": [
+      "syllabus.pdf"
+    ],
+    "reference_keywords": [
+      "professor",
+      "office hours",
+      "wednesday",
+      "machine learning"
+    ]
+  },
+  {
+    "id": "syllabus_3",
+    "type": "Syllabus QA",
+    "question": "What textbook is required for the Advanced Algorithms course?",
+    "expected_sources": [
+      "syllabus.pdf"
+    ],
+    "reference_keywords": [
+      "textbook",
+      "required",
+      "edition",
+      "introduction to algorithms"
+    ]
+  },
+  {
+    "id": "negative_1",
+    "type": "Negative Retrieval",
+    "question": "What is the capital of France?",
+    "expected_sources": [],
+    "reference_keywords": [
+      "not found in the provided documents"
+    ]
+  },
+  {
+    "id": "negative_2",
+    "type": "Negative Retrieval",
+    "question": "Who won the World Cup in 2022?",
+    "expected_sources": [],
+    "reference_keywords": [
+      "not found in the provided documents"
+    ]
+  },
+  {
+    "id": "negative_3",
+    "type": "Negative Retrieval",
+    "question": "How do you cook a perfect steak?",
+    "expected_sources": [],
+    "reference_keywords": [
+      "not found in the provided documents"
+    ]
+  },
+  {
+    "id": "summarization_1",
+    "type": "Summarization",
+    "question": "Summarize the key findings of the AlphaGo paper.",
+    "expected_sources": [
+      "alphago_paper.pdf"
+    ],
+    "reference_keywords": [
+      "reinforcement learning",
+      "monte carlo tree search",
+      "neural networks",
+      "go"
+    ]
+  },
+  {
+    "id": "summarization_2",
+    "type": "Summarization",
+    "question": "Provide a brief summary of the chapter on recurrent neural networks.",
+    "expected_sources": [
+      "deep_learning_book.pdf"
+    ],
+    "reference_keywords": [
+      "sequence",
+      "time steps",
+      "hidden state",
+      "backpropagation through time"
+    ]
+  },
+  {
+    "id": "citation_1",
+    "type": "Citation Correctness",
+    "question": "What are the three main components of the Transformer architecture?",
+    "expected_sources": [
+      "attention_is_all_you_need.pdf"
+    ],
+    "reference_keywords": [
+      "self-attention",
+      "feed-forward",
+      "encoder",
+      "decoder"
+    ]
+  },
+  {
+    "id": "citation_2",
+    "type": "Citation Correctness",
+    "question": "Explain the concept of dropout as described in the original paper.",
+    "expected_sources": [
+      "dropout_paper.pdf"
+    ],
+    "reference_keywords": [
+      "overfitting",
+      "regularization",
+      "probability",
+      "co-adaptation"
+    ]
+  },
+  {
+    "id": "citation_3",
+    "type": "Citation Correctness",
+    "question": "According to the course materials, what is the time complexity of QuickSort?",
+    "expected_sources": [
+      "course_materials.pdf",
+      "algorithms_notes.pdf"
+    ],
+    "reference_keywords": [
+      "o(n log n)",
+      "average case",
+      "worst case",
+      "o(n^2)"
+    ]
+  },
+  {
+    "id": "syllabus_4",
+    "type": "Syllabus QA",
+    "question": "Are calculators allowed in the final exam?",
+    "expected_sources": [
+      "syllabus.pdf"
+    ],
+    "reference_keywords": [
+      "calculator",
+      "allowed",
+      "final exam",
+      "not permitted"
+    ]
+  }
+]
