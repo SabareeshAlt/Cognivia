@@ -39,4 +39,5 @@ urlpatterns = [
     path("", root_index, name="root_index"),
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),  # Routes /api/ requests to your api app
+    path('prometheus/', include('django_prometheus.urls')),
 ]

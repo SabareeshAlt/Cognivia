@@ -8,6 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 PROMETHEUS_MULTIPROC_DIR = os.environ.get('PROMETHEUS_MULTIPROC_DIR', str(BASE_DIR / 'prometheus_multiproc_dir'))
+os.environ["PROMETHEUS_MULTIPROC_DIR"] = PROMETHEUS_MULTIPROC_DIR
 if not os.path.exists(PROMETHEUS_MULTIPROC_DIR):
     os.makedirs(PROMETHEUS_MULTIPROC_DIR, exist_ok=True)
 
@@ -96,29 +97,17 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "rag_project.wsgi.application"
 
-DB_ENGINE = env_required("DB_ENGINE").lower()
-if DB_ENGINE not in {"sqlite", "postgres"}:
-    raise RuntimeError("DB_ENGINE must be either 'sqlite' or 'postgres'")
-
-if DB_ENGINE == "postgres":
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": env_required("POSTGRES_DB"),
-            "USER": env_required("POSTGRES_USER"),
-            "PASSWORD": env_required("POSTGRES_PASSWORD"),
-            "HOST": env_required("POSTGRES_HOST"),
-            "PORT": env_required("POSTGRES_PORT"),
-            "CONN_MAX_AGE": env_int("POSTGRES_CONN_MAX_AGE"),
-        }
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": env_required("POSTGRES_DB"),
+        "USER": env_required("POSTGRES_USER"),
+        "PASSWORD": env_required("POSTGRES_PASSWORD"),
+        "HOST": env_required("POSTGRES_HOST"),
+        "PORT": env_required("POSTGRES_PORT"),
+        "CONN_MAX_AGE": env_int("POSTGRES_CONN_MAX_AGE"),
     }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
+}
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
@@ -226,7 +215,7 @@ LOGGING = {
     "formatters": {
         "verbose": {
             "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
-            "format": "%(asctime)s %(levelname)s %(name)s %(request_id)s %(message)s",
+            "format": "%(asctime)s %(levelname)s %(name)s %(request_id)s %(latency)s %(provider)s %(message)s",
         },
     },
     "handlers": {

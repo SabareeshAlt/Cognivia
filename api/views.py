@@ -112,12 +112,16 @@ def generate_streaming_response(question):
         yield f'data: {json.dumps({"type": "status", "content": "Waking up RAG engine..."})}\n\n'
         _load_rag_modules()
         for chunk in _stream_fn(question):
-            yield chunk
+            if isinstance(chunk, str) and not chunk.startswith("data:"):
+                yield f'data: {json.dumps({"type": "token", "content": chunk})}\n\n'
+            else:
+                yield chunk
         LLM_GENERATION_LATENCY.observe(time.time() - start_time)
     except Exception as exc:
         logger.error("Streaming error: %s", exc, exc_info=True)
         safe_message, _ = _classify_runtime_error(exc)
         yield f'data: {json.dumps({"type": "error", "content": safe_message})}\n\n'
+        yield f'data: {json.dumps({"type": "done", "content": ""})}\n\n'
 
 
 def _probe_vector_dependencies():
@@ -166,6 +170,10 @@ def detect_prompt_injection(text: str) -> bool:
         r"pretend to be",
         r"forget everything",
         r"override (all )?(previous )?instructions",
+        r"</user_question>",
+        r"<context>",
+        r"```",
+        r"base64",
     ]
     for pattern in patterns:
         if re.search(pattern, text_lower):

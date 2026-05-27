@@ -25,7 +25,7 @@ from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pymilvus import CollectionSchema, DataType, FieldSchema, MilvusClient, connections
 from pypdf import PdfReader
-
+from rag.pdf_sandbox import extract_pdf_text_sandboxed
 
 os.environ["MILVUS_ASYNC"] = "0"
 
@@ -112,32 +112,15 @@ def _looks_like_placeholder(value: str) -> bool:
     )
 
 
-def _normalize_milvus_uri(raw_uri: str) -> str:
-    parsed = urlparse(raw_uri)
-    if not parsed.scheme or not parsed.netloc:
-        raise ValueError("ACADEMERAG_MILVUS_URI must be a valid absolute URL")
-    if parsed.scheme != "https":
-        raise ValueError("ACADEMERAG_MILVUS_URI must use https")
-    if parsed.port is not None:
-        return raw_uri
-    host = parsed.hostname
-    if not host:
-        raise ValueError("ACADEMERAG_MILVUS_URI missing hostname")
-    netloc = host + ":443"
-    if parsed.username:
-        auth = parsed.username
-        if parsed.password:
-            auth += f":{parsed.password}"
-        netloc = f"{auth}@{netloc}"
-    return urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+# Cloud normalization logic stripped
 
 
-COLLECTION_NAME = _required_env("COLLECTION_NAME")
-EMBEDDING_MODEL = _required_env("EMBEDDING_MODEL")
-LLM_MODEL = _required_env("ACADEMERAG_LLM_MODEL")
-OLLAMA_BASE_URL = _required_env("OLLAMA_BASE_URL")
+COLLECTION_NAME = _env_str("COLLECTION_NAME", "academerag")
+EMBEDDING_MODEL = _env_str("EMBEDDING_MODEL", "nomic-embed-text")
+LLM_MODEL = _env_str("ACADEMERAG_LLM_MODEL", "llama3.1:latest")
+OLLAMA_BASE_URL = _env_str("OLLAMA_BASE_URL", "http://ollama:11434")
 LLM_TEMPERATURE = _env_float("ACADEMERAG_LLM_TEMPERATURE", 0.1)
-LLM_PROVIDER = _env_str("ACADEMERAG_LLM_PROVIDER", "ollama").lower()
+LLM_PROVIDER = "ollama"
 TOP_K = _env_int("ACADEMERAG_TOP_K", 3)
 DYNAMIC_TOP_K_MIN = _env_int("ACADEMERAG_TOP_K_MIN", 2)
 DYNAMIC_TOP_K_MAX = _env_int("ACADEMERAG_TOP_K_MAX", 6)
@@ -430,11 +413,11 @@ def _load_and_chunk_files(file_metadata: list[dict]) -> list[Document]:
             continue
             
         try:
-            reader = PdfReader(path)
+            pages = extract_pdf_text_sandboxed(path)
         except Exception as e:
-            logger.error("Error reading PDF %s: %s. Skipping.", item['relative_path'], e)
+            logger.error("Sandbox extraction failed for %s: %s. Skipping.", item['relative_path'], e)
             continue
-        page_count = len(reader.pages)
+        page_count = len(pages)
         
         current_subject = item["source"].replace('.pdf', '')
         current_unit_number = None
@@ -486,8 +469,9 @@ def _load_and_chunk_files(file_metadata: list[dict]) -> list[Document]:
             current_section_text = ""
             page_boundaries = []
 
-        for idx, page in enumerate(reader.pages, start=1):
-            page_text = page.extract_text() or ""
+        for page_info in pages:
+            idx = page_info["page_number"]
+            page_text = page_info["text"] or ""
             if not page_text.strip():
                 continue
                 
@@ -645,28 +629,12 @@ def _build_langchain_vector_store(cfg: dict, embeddings: OllamaEmbeddings) -> Mi
 
 
 def _get_milvus_config():
-    # Primary: Milvus Cloud (Zilliz) if configured and enabled
-    if _env_bool("ACADEMERAG_ENABLE_MILVUS_CLOUD", default=False):
-        try:
-            milvus_uri = _normalize_milvus_uri(_required_env("ACADEMERAG_MILVUS_URI"))
-            milvus_token = _required_env("ACADEMERAG_MILVUS_TOKEN")
-            if not _looks_like_placeholder(milvus_uri) and not _looks_like_placeholder(milvus_token):
-                logger.info("Using Milvus Cloud (Zilliz) vector store.")
-                return {
-                    "uri": milvus_uri,
-                    "token": milvus_token,
-                    "collection": COLLECTION_NAME,
-                    "model": EMBEDDING_MODEL,
-                }
-            logger.warning("Milvus Cloud configured with placeholder credentials; falling back to local.")
-        except Exception as exc:
-            logger.warning("Milvus Cloud config error (%s); falling back to local.", exc)
-
-    # Fallback: Milvus Lite (local file-based)
-    logger.info("Using Milvus Lite (local) vector store.")
+    milvus_uri = _env_str("ACADEMERAG_MILVUS_URI", "http://milvus:19530")
+    milvus_token = _env_str("ACADEMERAG_MILVUS_TOKEN", "")
+    logger.info("Using local Milvus Standalone vector store at %s", milvus_uri)
     return {
-        "uri": "./milvus_local.db",
-        "token": "",
+        "uri": milvus_uri,
+        "token": milvus_token,
         "collection": COLLECTION_NAME,
         "model": EMBEDDING_MODEL,
     }
@@ -891,44 +859,42 @@ def _load_persisted_bm25() -> bool:
         logger.warning(f"Failed to load persisted BM25 index: {e}")
     return False
 
+def _init_bm25_index_at_startup() -> None:
+    if _load_persisted_bm25():
+        logger.info("BM25 index loaded successfully at startup.")
+        return
+
+    logger.info("BM25 index missing or stale at startup. Building synchronously under lock.")
+    try:
+        import filelock
+        lock = filelock.FileLock(BM25_INDEX_FILE + ".build.lock")
+        with lock.acquire(timeout=300):
+            if _load_persisted_bm25():
+                logger.info("BM25 index built by another worker. Loaded successfully.")
+                return
+            logger.info("Building BM25 index...")
+            _refresh_fallback_cache()
+    except Exception as e:
+        logger.error(f"Failed to initialize BM25 index at startup: {e}")
+
 def _fallback_chunk_corpus() -> tuple[Document, ...]:
-    file_metadata = _collect_pdf_metadata()
-    signature = _fallback_signature(file_metadata)
     with _fallback_cache_lock:
-        cached_signature = _fallback_cache_state["signature"]
         cached_corpus = _fallback_cache_state["corpus"]
-        has_cache = bool(cached_corpus)
         
-    if cached_signature != signature:
-        if not _load_persisted_bm25():
-            _schedule_fallback_cache_refresh(force=True)
-            
-    if has_cache:
+    if cached_corpus:
         return cached_corpus
         
-    _wait_for_fallback_cache()
-    
-    with _fallback_cache_lock:
-        return _fallback_cache_state["corpus"] or tuple()
+    logger.warning("Local BM25 corpus unavailable; failing fast.")
+    return tuple()
 
 def _fallback_corpus_stats() -> dict:
     with _fallback_cache_lock:
         stats = _fallback_cache_state["stats"]
     if stats is not None:
         return stats
-    _wait_for_fallback_cache()
-    with _fallback_cache_lock:
-        stats = _fallback_cache_state["stats"]
-    if stats is not None:
-        return stats
-    logger.warning("Local corpus stats unavailable on cold-start; building synchronously once.")
-    _refresh_fallback_cache()
-    with _fallback_cache_lock:
-        stats = _fallback_cache_state["stats"]
-    if stats is not None:
-        return stats
-    corpus = _fallback_chunk_corpus()
-    return _build_fallback_stats_from_docs(corpus)
+        
+    logger.warning("Local BM25 index unavailable; failing fast.")
+    return {"corpus": tuple(), "inverted_index": {}, "doc_lengths": [], "avg_doc_length": 1.0, "doc_count": 0}
 
 
 def _bm25_score(query_terms: list[str], doc_index: int, stats: dict) -> float:
@@ -971,7 +937,6 @@ def _fallback_retrieve_docs(question: str, k: int, target_sources: set[str] | No
     Retrieve documents using the inverted index for optimized BM25 scoring.
     Designed to act as the sparse leg of the parallel hybrid search.
     """
-    _schedule_fallback_cache_refresh()
     stats = _fallback_corpus_stats()
     corpus = stats["corpus"]
     if not corpus:
@@ -1371,36 +1336,7 @@ def get_retriever():
 def _milvus_endpoint_reachable(cfg: dict) -> bool:
     return True
 
-def _schedule_fallback_cache_refresh(force: bool = False) -> None:
-    file_metadata = _collect_pdf_metadata()
-    signature = _fallback_signature(file_metadata)
-    with _fallback_cache_lock:
-        if _fallback_cache_state["inflight"]:
-            return
-        if not force and _fallback_cache_state["signature"] == signature and _fallback_cache_state["stats"] is not None:
-            return
-        _fallback_cache_state["inflight"] = True
-
-    def _runner():
-        try:
-            _refresh_fallback_cache()
-        except Exception as exc:
-            logger.error("Background local corpus refresh failed: %s", exc)
-            with _fallback_cache_lock:
-                _fallback_cache_state["inflight"] = False
-
-    threading.Thread(target=_runner, daemon=True).start()
-
-def _wait_for_fallback_cache(max_wait_seconds: float = 2.0) -> None:
-    deadline = time.monotonic() + max_wait_seconds
-    while time.monotonic() < deadline:
-        with _fallback_cache_lock:
-            if _fallback_cache_state["stats"] is not None:
-                return
-            inflight = _fallback_cache_state["inflight"]
-        if not inflight:
-            return
-        time.sleep(0.05)
+# Fallback cache scheduling removed for strict offline performance.
 
 
 
@@ -1539,28 +1475,10 @@ CLOUD_FAILURE_THRESHOLD = 3
 CLOUD_COOLDOWN_SECONDS = 60.0
 
 def _get_cloud_config() -> dict | None:
-    if _env_bool("ACADEMERAG_ENABLE_MILVUS_CLOUD", default=False):
-        try:
-            milvus_uri = _normalize_milvus_uri(_required_env("ACADEMERAG_MILVUS_URI"))
-            milvus_token = _required_env("ACADEMERAG_MILVUS_TOKEN")
-            if not _looks_like_placeholder(milvus_uri) and not _looks_like_placeholder(milvus_token):
-                return {
-                    "uri": milvus_uri,
-                    "token": milvus_token,
-                    "collection": COLLECTION_NAME,
-                    "model": EMBEDDING_MODEL,
-                }
-        except Exception:
-            pass
     return None
 
 def _get_local_config() -> dict:
-    return {
-        "uri": "./milvus_local.db",
-        "token": "",
-        "collection": COLLECTION_NAME,
-        "model": EMBEDDING_MODEL,
-    }
+    return _get_milvus_config()
 
 def _search_milvus_with_config(cfg: dict, question: str, k: int, target_sources: set[str] | None, timeout_sec: float) -> list[Document]:
     if not cfg:
@@ -1932,44 +1850,6 @@ def _clean_syllabus_text(text: str) -> str:
     compacted = re.sub('\\n{3,}', '\n\n', compacted)
     return compacted.strip()
 
-def _extract_syllabus_text(question: str) -> str | None:
-    if not _is_syllabus_query(question):
-        return None
-    if _is_multi_subject_query(question):
-        return None
-    subject_phrase = _query_subject_phrase(question)
-    if not subject_phrase:
-        return None
-    pages = _page_text_map()
-    ordered_pages = sorted(pages.items(), key=lambda item: (item[0][0], item[0][1]))
-    start_index = None
-    for index, ((document_path, page_number), text) in enumerate(ordered_pages):
-        normalized = text.lower()
-        if subject_phrase in normalized and _unit_heading_count(text) > 0:
-            start_index = index
-            break
-    if start_index is None:
-        return None
-    collected_pages: list[str] = []
-    for index in range(start_index, min(start_index + 4, len(ordered_pages))):
-        (document_path, page_number), text = ordered_pages[index]
-        normalized = text.lower()
-        if index > start_index and re.search('\\b\\d{10}\\b', text) and (subject_phrase not in normalized) and (_unit_heading_count(text) == 0):
-            break
-        collected_pages.append(text)
-        if 'total hours' in normalized or 'total periods' in normalized:
-            break
-    combined = '\n'.join(collected_pages)
-    unit_start = re.search('(?im)^\\s*unit\\s+i\\b', combined)
-    total_match = re.search('(?im)^\\s*total\\s+(?:hours|periods)\\b.*$', combined)
-    if unit_start:
-        start_pos = unit_start.start()
-        end_pos = total_match.end() if total_match else len(combined)
-        extracted = _clean_syllabus_text(combined[start_pos:end_pos])
-        if extracted:
-            return extracted
-    return _clean_syllabus_text(combined) or None
-
 def _generic_retrieval_boost(question: str, doc: Document) -> float:
     text = doc.page_content or ''
     normalized = text.lower()
@@ -2088,3 +1968,6 @@ def _dense_search_pipeline(question: str, k: int, target_sources: Optional[Set[s
     logger.info("DENSE_PIPELINE_COMPLETED | query='%s' | latency_ms=%.1f | chunk_count=%d | fallback_used=%s", 
                 question, latency_ms, len(docs), fallback_used)
     return docs
+
+# Pre-build BM25 strictly at startup
+_init_bm25_index_at_startup()
