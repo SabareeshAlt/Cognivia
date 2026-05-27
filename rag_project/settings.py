@@ -209,12 +209,18 @@ RAG_READY_TIMEOUT_MS = env_int("RAG_READY_TIMEOUT_MS")
 DJANGO_LOG_LEVEL = env_required("DJANGO_LOG_LEVEL")
 API_LOG_LEVEL = env_required("API_LOG_LEVEL")
 
+try:
+    import pythonjsonlogger
+    formatter_class = "pythonjsonlogger.jsonlogger.JsonFormatter"
+except ImportError:
+    formatter_class = "logging.Formatter"
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
-            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
+            "()": formatter_class,
             "format": "%(asctime)s %(levelname)s %(name)s %(request_id)s %(latency)s %(provider)s %(message)s",
         },
     },
