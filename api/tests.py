@@ -5,6 +5,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.urls import reverse
 from unittest import skipUnless
+from django.core.cache import cache
 
 try:
     import rest_framework_simplejwt  # noqa: F401
@@ -15,6 +16,8 @@ except Exception:
 
 @skipUnless(SIMPLEJWT_AVAILABLE, "simplejwt dependency not installed")
 class AuthApiTests(TestCase):
+    def setUp(self):
+        cache.clear()
     def test_register_and_login(self):
         register_resp = self.client.post(
             reverse("auth_register"),
@@ -85,6 +88,8 @@ class AuthApiTests(TestCase):
 
 
 class AskEndpointSecurityTests(TestCase):
+    def setUp(self):
+        cache.clear()
     def test_ask_requires_authentication(self):
         response = self.client.post(
             reverse("ask_question"),
@@ -117,7 +122,22 @@ class AskEndpointSecurityTests(TestCase):
         self.assertIn("No question provided", response.json()["error"])
 
 
+@skipUnless(SIMPLEJWT_AVAILABLE, "simplejwt dependency not installed")
 class HealthEndpointTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.client.post(
+            reverse("auth_register"),
+            data=json.dumps({"email": "health@example.com", "password": "Secure123!", "name": "Health"}),
+            content_type="application/json",
+        )
+        login_resp = self.client.post(
+            reverse("auth_login"),
+            data=json.dumps({"email": "health@example.com", "password": "Secure123!"}),
+            content_type="application/json",
+        )
+        self.token = login_resp.json()["tokens"]["access"]
+
     def test_health_live_is_fast_and_alive(self):
         response = self.client.get(reverse("health_live"))
         self.assertEqual(response.status_code, 200)
@@ -127,7 +147,7 @@ class HealthEndpointTests(TestCase):
 
     def test_metrics_endpoint_exposes_counters(self):
         self.client.get(reverse("health_live"))
-        response = self.client.get(reverse("metrics"))
+        response = self.client.get(reverse("metrics"), HTTP_AUTHORIZATION=f"Bearer {self.token}")
         self.assertEqual(response.status_code, 200)
         body = response.content.decode("utf-8")
         self.assertIn("academerag_http_requests_total", body)
@@ -142,7 +162,7 @@ class HealthEndpointTests(TestCase):
         from api import views as api_views
         api_views._vector_ready_cache["ready"] = False
         api_views._vector_ready_cache["last_error"] = "unavailable"
-        response = self.client.get(reverse("health_ready"))
+        response = self.client.get(reverse("health_ready"), HTTP_AUTHORIZATION=f"Bearer {self.token}")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["status"], "degraded")
@@ -158,7 +178,7 @@ class HealthEndpointTests(TestCase):
         from api import views as api_views
         api_views._vector_ready_cache["ready"] = True
         api_views._vector_ready_cache["last_error"] = None
-        response = self.client.get(reverse("health_ready"))
+        response = self.client.get(reverse("health_ready"), HTTP_AUTHORIZATION=f"Bearer {self.token}")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload["services"]["vector_store"])
@@ -166,6 +186,8 @@ class HealthEndpointTests(TestCase):
 
 
 class RetrievalBehaviorTests(TestCase):
+    def setUp(self):
+        cache.clear()
     @skipUnless(SIMPLEJWT_AVAILABLE, "simplejwt dependency not installed")
     @patch("api.views._load_rag_modules")
     @patch("api.views._response_fn", autospec=False)
@@ -217,6 +239,8 @@ class RetrievalBehaviorTests(TestCase):
 
 @skipUnless(SIMPLEJWT_AVAILABLE, "simplejwt dependency not installed")
 class DependencyFailureTests(TestCase):
+    def setUp(self):
+        cache.clear()
     def _auth_header(self) -> str:
         self.client.post(
             reverse("auth_register"),

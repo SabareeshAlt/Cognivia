@@ -7,8 +7,8 @@ User = get_user_model()
 class OfflineSecurityTests(TestCase):
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(username="testuser", password="testpassword", email="test@example.com")
-        self.inactive_user = User.objects.create_user(username="inactive", password="testpassword", email="inactive@example.com", is_active=False)
+        self.user = User.objects.create_user(username="test@example.com", password="testpassword", email="test@example.com")
+        self.inactive_user = User.objects.create_user(username="inactive@example.com", password="testpassword", email="inactive@example.com", is_active=False)
         
         # Get token for active user
         resp = self.client.post("/api/auth/login/", json.dumps({"email": "test@example.com", "password": "testpassword"}), content_type="application/json")

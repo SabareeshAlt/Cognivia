@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 from datetime import timedelta
 
@@ -76,6 +77,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "api.middleware.RequestIDMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
+    "django_ratelimit.middleware.RatelimitMiddleware",
 ]
 
 ROOT_URLCONF = "rag_project.urls"
@@ -97,17 +99,27 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "rag_project.wsgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": env_required("POSTGRES_DB"),
-        "USER": env_required("POSTGRES_USER"),
-        "PASSWORD": env_required("POSTGRES_PASSWORD"),
-        "HOST": env_required("POSTGRES_HOST"),
-        "PORT": env_required("POSTGRES_PORT"),
-        "CONN_MAX_AGE": env_int("POSTGRES_CONN_MAX_AGE"),
+db_engine = os.getenv("DB_ENGINE", "postgresql").strip().lower()
+
+if db_engine == "sqlite":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": env_required("POSTGRES_DB"),
+            "USER": env_required("POSTGRES_USER"),
+            "PASSWORD": env_required("POSTGRES_PASSWORD"),
+            "HOST": env_required("POSTGRES_HOST"),
+            "PORT": env_required("POSTGRES_PORT"),
+            "CONN_MAX_AGE": env_int("POSTGRES_CONN_MAX_AGE"),
+        }
+    }
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
@@ -183,16 +195,24 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True
 X_FRAME_OPTIONS = "DENY"
 
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": os.getenv("REDIS_URL", "redis://redis:6379/1"),
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "IGNORE_EXCEPTIONS": False,
+if db_engine == "sqlite" or "test" in sys.argv:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "unique-snowflake",
         }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": os.getenv("REDIS_URL", "redis://redis:6379/1"),
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "IGNORE_EXCEPTIONS": False,
+            }
+        }
+    }
 
 RATELIMIT_USE_CACHE = "default"
 RATELIMIT_FAIL_OPEN = False

@@ -35,7 +35,7 @@ def _issue_tokens(user):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@ratelimit(key="ip", rate=getattr(settings, "AUTH_REGISTER_RATELIMIT", "10/m"), block=True, cache="default")
+@ratelimit(key="ip", rate=getattr(settings, "AUTH_REGISTER_RATELIMIT", "10/m"), block=True)
 def register(request):
     if not SIMPLEJWT_AVAILABLE:
         return json_error(request, "Auth dependency missing: djangorestframework-simplejwt", 503)
@@ -78,7 +78,7 @@ def register(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@ratelimit(key="ip", rate=getattr(settings, "AUTH_LOGIN_RATELIMIT", "15/m"), block=True, cache="default")
+@ratelimit(key="ip", rate=getattr(settings, "AUTH_LOGIN_RATELIMIT", "15/m"), block=True)
 def login(request):
     if not SIMPLEJWT_AVAILABLE:
         return json_error(request, "Auth dependency missing: djangorestframework-simplejwt", 503)
@@ -92,6 +92,12 @@ def login(request):
 
     user = authenticate(request, username=email, password=password)
     if user is None:
+        try:
+            db_user = User.objects.filter(username=email).first()
+            if db_user and not db_user.is_active and db_user.check_password(password):
+                return json_error(request, "Account is disabled", 403)
+        except Exception:
+            pass
         return json_error(request, "Invalid credentials", 401)
     if not getattr(user, "is_active", False):
         return json_error(request, "Account is disabled", 403)
@@ -108,7 +114,7 @@ def login(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@ratelimit(key="ip", rate=getattr(settings, "AUTH_REFRESH_RATELIMIT", "20/m"), block=True, cache="default")
+@ratelimit(key="ip", rate=getattr(settings, "AUTH_REFRESH_RATELIMIT", "20/m"), block=True)
 def refresh(request):
     if not SIMPLEJWT_AVAILABLE:
         return json_error(request, "Auth dependency missing: djangorestframework-simplejwt", 503)

@@ -185,7 +185,7 @@ def detect_prompt_injection(text: str) -> bool:
 @csrf_exempt
 @require_http_methods(["POST"])
 @jwt_required
-@ratelimit(key="ip", rate=getattr(settings, "RATELIMIT_DEFAULT", "30/m"), block=True, cache="default")
+@ratelimit(key="ip", rate=getattr(settings, "RATELIMIT_DEFAULT", "30/m"), block=True)
 def ask_question(request):
     """Handles both /api/ask/ and /api/ask/stream/."""
     try:
@@ -267,7 +267,7 @@ def health_live(request):
 
 
 @require_http_methods(["GET"])
-@ratelimit(key="ip", rate="60/m", block=True, cache="default")
+@ratelimit(key="ip", rate="60/m", block=True)
 @jwt_required
 def health_ready(request):
     """Readiness probe with dependency checks."""
@@ -316,7 +316,7 @@ def health_ready(request):
 
 
 @require_http_methods(["GET"])
-@ratelimit(key="ip", rate="60/m", block=True, cache="default")
+@ratelimit(key="ip", rate="60/m", block=True)
 @jwt_required
 def health_check(request):
     """Backward-compatible health alias mapped to readiness checks."""
@@ -324,7 +324,7 @@ def health_check(request):
 
 
 @require_http_methods(["GET"])
-@ratelimit(key="ip", rate="120/m", block=True, cache="default")
+@ratelimit(key="ip", rate="120/m", block=True)
 @jwt_required
 def metrics(request):
     body = render_prometheus()
@@ -333,7 +333,7 @@ def metrics(request):
 
 @require_http_methods(["GET"])
 @jwt_required
-@ratelimit(key="ip", rate="30/m", block=True, cache="default")
+@ratelimit(key="ip", rate="30/m", block=True)
 def retrieval_diagnostics(request):
     user = getattr(request, "user", None)
     if not user or not getattr(user, "is_superuser", False):
