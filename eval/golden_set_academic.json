@@ -1,44 +1,145 @@
 [
   {
-    "id": "syllabus_1",
-    "type": "Syllabus QA",
-    "question": "What is the grading policy for late assignments?",
+    "id": "factual_1",
+    "type": "Factual QA",
+    "question": "What are the subjects taught in the BE Computer Science and Engineering programme?",
     "expected_sources": [
-      "syllabus.pdf"
+      "RAG sample 1.pdf",
+      "RAG sample 2.pdf",
+      "RAG sample 3.pdf"
     ],
     "reference_keywords": [
-      "penalty",
-      "late",
-      "deduction",
-      "deadline"
+      "computer science",
+      "engineering",
+      "subject",
+      "course"
+    ]
+  },
+  {
+    "id": "syllabus_1",
+    "type": "Syllabus QA",
+    "question": "What is the syllabus for the first unit of any subject in the provided documents?",
+    "expected_sources": [
+      "RAG sample 1.pdf",
+      "RAG sample 2.pdf",
+      "RAG sample 3.pdf"
+    ],
+    "reference_keywords": [
+      "unit",
+      "introduction",
+      "topics",
+      "hours"
     ]
   },
   {
     "id": "syllabus_2",
     "type": "Syllabus QA",
-    "question": "Which professor is teaching the Machine Learning module and what are their office hours?",
+    "question": "List the course objectives mentioned in the documents.",
     "expected_sources": [
-      "syllabus.pdf"
+      "RAG sample 1.pdf",
+      "RAG sample 2.pdf",
+      "RAG sample 3.pdf"
     ],
     "reference_keywords": [
-      "professor",
-      "office hours",
-      "wednesday",
-      "machine learning"
+      "objective",
+      "student",
+      "understand",
+      "course"
     ]
   },
   {
     "id": "syllabus_3",
     "type": "Syllabus QA",
-    "question": "What textbook is required for the Advanced Algorithms course?",
+    "question": "What are the course outcomes listed in the provided documents?",
     "expected_sources": [
-      "syllabus.pdf"
+      "RAG sample 1.pdf",
+      "RAG sample 2.pdf",
+      "RAG sample 3.pdf"
     ],
     "reference_keywords": [
-      "textbook",
-      "required",
-      "edition",
-      "introduction to algorithms"
+      "outcome",
+      "able to",
+      "apply",
+      "analyse"
+    ]
+  },
+  {
+    "id": "syllabus_4",
+    "type": "Syllabus QA",
+    "question": "How many units are there in the syllabus described in the documents?",
+    "expected_sources": [
+      "RAG sample 1.pdf",
+      "RAG sample 2.pdf",
+      "RAG sample 3.pdf"
+    ],
+    "reference_keywords": [
+      "unit",
+      "five",
+      "total",
+      "periods"
+    ]
+  },
+  {
+    "id": "keyword_1",
+    "type": "Keyword Lookup",
+    "question": "What topics are covered under data structures in the syllabus?",
+    "expected_sources": [
+      "RAG sample 1.pdf",
+      "RAG sample 2.pdf",
+      "RAG sample 3.pdf"
+    ],
+    "reference_keywords": [
+      "data structures",
+      "array",
+      "linked list",
+      "tree",
+      "stack"
+    ]
+  },
+  {
+    "id": "keyword_2",
+    "type": "Keyword Lookup",
+    "question": "What does the syllabus say about operating systems?",
+    "expected_sources": [
+      "RAG sample 1.pdf",
+      "RAG sample 2.pdf",
+      "RAG sample 3.pdf"
+    ],
+    "reference_keywords": [
+      "operating system",
+      "process",
+      "scheduling",
+      "memory"
+    ]
+  },
+  {
+    "id": "summary_1",
+    "type": "Summarization",
+    "question": "Summarize the contents of the first document.",
+    "expected_sources": [
+      "RAG sample 1.pdf"
+    ],
+    "reference_keywords": [
+      "subject",
+      "unit",
+      "total",
+      "periods"
+    ]
+  },
+  {
+    "id": "summary_2",
+    "type": "Summarization",
+    "question": "Give a brief overview of the academic content in the provided PDF documents.",
+    "expected_sources": [
+      "RAG sample 1.pdf",
+      "RAG sample 2.pdf",
+      "RAG sample 3.pdf"
+    ],
+    "reference_keywords": [
+      "syllabus",
+      "course",
+      "unit",
+      "engineering"
     ]
   },
   {
@@ -53,7 +154,7 @@
   {
     "id": "negative_2",
     "type": "Negative Retrieval",
-    "question": "Who won the World Cup in 2022?",
+    "question": "Who won the FIFA World Cup in 2022?",
     "expected_sources": [],
     "reference_keywords": [
       "not found in the provided documents"
@@ -69,88 +170,50 @@
     ]
   },
   {
-    "id": "summarization_1",
-    "type": "Summarization",
-    "question": "Summarize the key findings of the AlphaGo paper.",
+    "id": "multipage_1",
+    "type": "Multi-page Reasoning",
+    "question": "What is the total number of periods or lecture hours specified across all units in any subject?",
     "expected_sources": [
-      "alphago_paper.pdf"
+      "RAG sample 1.pdf",
+      "RAG sample 2.pdf",
+      "RAG sample 3.pdf"
     ],
     "reference_keywords": [
-      "reinforcement learning",
-      "monte carlo tree search",
-      "neural networks",
-      "go"
+      "total",
+      "periods",
+      "hours",
+      "unit"
     ]
   },
   {
-    "id": "summarization_2",
-    "type": "Summarization",
-    "question": "Provide a brief summary of the chapter on recurrent neural networks.",
+    "id": "table_1",
+    "type": "Table Extraction",
+    "question": "List all the units and their titles as mentioned in the documents.",
     "expected_sources": [
-      "deep_learning_book.pdf"
+      "RAG sample 1.pdf",
+      "RAG sample 2.pdf",
+      "RAG sample 3.pdf"
     ],
     "reference_keywords": [
-      "sequence",
-      "time steps",
-      "hidden state",
-      "backpropagation through time"
+      "unit",
+      "title",
+      "introduction"
     ]
   },
   {
-    "id": "citation_1",
-    "type": "Citation Correctness",
-    "question": "What are the three main components of the Transformer architecture?",
+    "id": "semantic_1",
+    "type": "Semantic Retrieval",
+    "question": "What programming languages or tools are mentioned in the curriculum?",
     "expected_sources": [
-      "attention_is_all_you_need.pdf"
+      "RAG sample 1.pdf",
+      "RAG sample 2.pdf",
+      "RAG sample 3.pdf"
     ],
     "reference_keywords": [
-      "self-attention",
-      "feed-forward",
-      "encoder",
-      "decoder"
-    ]
-  },
-  {
-    "id": "citation_2",
-    "type": "Citation Correctness",
-    "question": "Explain the concept of dropout as described in the original paper.",
-    "expected_sources": [
-      "dropout_paper.pdf"
-    ],
-    "reference_keywords": [
-      "overfitting",
-      "regularization",
-      "probability",
-      "co-adaptation"
-    ]
-  },
-  {
-    "id": "citation_3",
-    "type": "Citation Correctness",
-    "question": "According to the course materials, what is the time complexity of QuickSort?",
-    "expected_sources": [
-      "course_materials.pdf",
-      "algorithms_notes.pdf"
-    ],
-    "reference_keywords": [
-      "o(n log n)",
-      "average case",
-      "worst case",
-      "o(n^2)"
-    ]
-  },
-  {
-    "id": "syllabus_4",
-    "type": "Syllabus QA",
-    "question": "Are calculators allowed in the final exam?",
-    "expected_sources": [
-      "syllabus.pdf"
-    ],
-    "reference_keywords": [
-      "calculator",
-      "allowed",
-      "final exam",
-      "not permitted"
+      "language",
+      "tool",
+      "programming",
+      "software"
     ]
   }
 ]

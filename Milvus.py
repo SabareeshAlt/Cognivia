@@ -75,6 +75,25 @@ STOPWORDS = {
     "tell",
     "me",
 }
+
+# Syllabus section headings that contain noise (references, lab requirements, etc.)
+_SYLLABUS_NOISE_HEADINGS = (
+    "text books",
+    "textbooks",
+    "references",
+    "reference books",
+    "lab requirements",
+    "hardware requirements",
+    "software requirements",
+    "list of experiments",
+    "co-curricular activities",
+    "beyond the syllabus",
+    "online resources",
+    "web resources",
+    "assessment methodology",
+    "course outcomes",
+    "program outcomes",
+)
 BM25_K1 = 1.5
 BM25_B = 0.75
 
@@ -1090,15 +1109,66 @@ def _expand_neighbor_chunks(doc: Document, milvus_client, collection_name: str) 
             
         # Combine the original document with its neighbors
         all_docs = [doc] + neighbors
-        
+
         # Sort by chunk_index to maintain reading order
         all_docs.sort(key=lambda x: x.metadata.get("chunk_index", 0))
-        
+
         return all_docs
-        
+
     except Exception as e:
         logger.warning("Failed to expand neighbor chunks for %s (index %s): %s", source, chunk_index, e)
         return [doc]
+
+
+def _expand_neighbors_from_corpus(docs: list[Document], include_adjacent: bool = True) -> list[Document]:
+    """
+    Expand retrieved docs with their immediately adjacent chunks from the BM25 corpus.
+    Uses the in-memory corpus so no Milvus round-trip is needed.
+    Deduplicates and preserves all original docs.
+    """
+    corpus = _fallback_chunk_corpus()
+    if not corpus:
+        return docs
+
+    # Build lookup: (document_path, chunk_index) -> Document
+    lookup: dict[tuple, Document] = {}
+    for corp_doc in corpus:
+        meta = corp_doc.metadata or {}
+        dp = meta.get("document_path")
+        ci = meta.get("chunk_index")
+        if dp is not None and ci is not None:
+            lookup[(dp, int(ci))] = corp_doc
+
+    seen_keys: set[tuple] = set()
+    result: list[Document] = []
+
+    for doc in docs:
+        meta = doc.metadata or {}
+        dp = meta.get("document_path")
+        ci = meta.get("chunk_index")
+        key = (dp, ci if ci is None else int(ci))
+
+        if key not in seen_keys:
+            seen_keys.add(key)
+            result.append(doc)
+
+        if not include_adjacent or dp is None or ci is None:
+            continue
+
+        # Add previous and next chunks
+        for offset in (-1, 1):
+            neighbor_key = (dp, int(ci) + offset)
+            if neighbor_key not in seen_keys and neighbor_key in lookup:
+                seen_keys.add(neighbor_key)
+                neighbor = lookup[neighbor_key]
+                # Tag neighbor so we can identify expanded chunks in logs
+                neighbor = Document(
+                    page_content=neighbor.page_content,
+                    metadata={**neighbor.metadata, "_neighbor_expanded": True},
+                )
+                result.append(neighbor)
+
+    return result
 
 
 
@@ -1163,8 +1233,9 @@ def _retrieve_docs(question: str) -> list:
     
     if target_sources:
         k = max(k, 6)
-        
-    search_k = k * 2
+
+    # Use a large candidate pool for better recall before reranking
+    search_k = max(40, k * 4)
 
     start_time = time.perf_counter()
     
@@ -1223,13 +1294,20 @@ def _retrieve_docs(question: str) -> list:
         reranked_docs = _cross_encoder_rerank(question_processed, fused_docs, k)
         rerank_latency_ms = (time.perf_counter() - rerank_start_time) * 1000
         logger.info("RERANK_COMPLETED | request_id=- | latency_ms=%.1f | chunk_count=%d", rerank_latency_ms, len(reranked_docs))
-        
+
         if reranked_docs:
-            return reranked_docs[:max(k, 4)]
+            top_docs = reranked_docs[:max(k, 4)]
+            expanded = _expand_neighbors_from_corpus(top_docs)
+            logger.info(
+                "NEIGHBOR_EXPANSION | input_chunks=%d | expanded_chunks=%d",
+                len(top_docs), len(expanded),
+            )
+            return expanded
         return []
     except Exception as exc:
         logger.warning("RERANK_FAILED | error='%s'", exc)
-        return fused_docs[:k]
+        expanded = _expand_neighbors_from_corpus(fused_docs[:k])
+        return expanded
 def _source_index_status() -> list[dict]:
     file_metadata = _collect_pdf_metadata()
     tracked_hashes = _load_tracking_map()
@@ -1290,7 +1368,14 @@ def get_retrieval_diagnostics() -> dict:
     }
 
 
-def _format_context(docs, max_chars=4000):
+def _format_context(docs, max_chars=32000):
+    # Sort chunks by natural document order for coherent context
+    docs = sorted(docs, key=lambda d: (
+        str((d.metadata or {}).get("source", "")),
+        int((d.metadata or {}).get("page_number", 0) or 0),
+        int((d.metadata or {}).get("chunk_index", 0) or 0),
+    ))
+
     max_tokens = max_chars // 4
     try:
         import tiktoken
@@ -1537,7 +1622,7 @@ def _search_milvus_with_config(cfg: dict, question: str, k: int, target_sources:
         "collection_name": cfg["collection"],
         "data": [query_vector],
         "anns_field": "vector",
-        "search_params": {"metric_type": "COSINE", "params": {}},
+        "search_params": {"metric_type": "COSINE", "params": {"ef": 64}},
         "limit": k,
         "output_fields": ["text", "source", "document_path", "document_hash", "page_number", "chunk_index"],
         "timeout": timeout_sec,
@@ -1680,7 +1765,15 @@ def _search_bm25_fallback(question: str, k: int, target_sources: set[str] | None
 
 
 def _tokenize(text: str) -> list[str]:
-    return re.findall('[a-z0-9]+', (text or '').lower())
+    """Tokenize text preserving compound technical terms like C++, TCP/IP, Node.js, Llama-3.3."""
+    raw = text or ""
+    # Extract compound tokens first: letters/digits joined by +, -, ., /
+    # e.g. "C++" -> "c++", "TCP/IP" -> "tcp/ip", "Node.js" -> "node.js", "Llama-3.3" -> "llama-3.3"
+    compounds = re.findall(r'[A-Za-z][A-Za-z0-9]*(?:[+\-./ ][A-Za-z0-9]+)+', raw)
+    compound_lower = [c.lower().replace(" ", "-") for c in compounds]
+    # Standard alphanumeric tokens
+    words = re.findall(r'[a-z0-9]+', raw.lower())
+    return compound_lower + words
 
 def _query_keywords(question: str) -> set[str]:
     return {token for token in _tokenize(question) if token not in STOPWORDS}

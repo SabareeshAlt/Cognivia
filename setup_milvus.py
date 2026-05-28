@@ -147,7 +147,7 @@ def main():
         print("   - Is Ollama running? (ollama serve)")
         print("   - Are the models pulled?")
         print("     ollama pull llama3.2")
-        print("     ollama pull mxbai-embed-large")
+        print("     ollama pull nomic-embed-text")
         print("   - Do you have PDF files?")
 
 if __name__ == "__main__":
