@@ -27,7 +27,28 @@ function renderInlineMarkdown(input: string): string {
   text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   text = text.replace(/\*([^*]+)\*/g, "<em>$1</em>");
   text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+  
+  // Parse [Source: filename, Page: number] or [Source: filename] into visual citation chips
+  text = text.replace(
+    /\[Source:\s*([^,\]]+)(?:,\s*Page:\s*(\d+))?\]/gi,
+    (_, file, page) => {
+      const pageStr = page ? ` (p. ${page})` : "";
+      const titleStr = page ? `Source: ${file}, Page ${page}` : `Source: ${file}`;
+      return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 text-xs font-semibold rounded bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all select-none cursor-default" title="${titleStr}">📄 ${file}${pageStr}</span>`;
+    }
+  );
+  
   return text;
+}
+
+function cleanAssistantDisplayText(input: string): string {
+  return input
+    .replace(/\s*\(\s*[-–—\s]+,\s*credits?\s*\)/gi, "")
+    .replace(/\s*\[Source:\s*[^,\]]+,\s*Page:\s*\]/gi, "")
+    .replace(/\s*\[Source:\s*RAG sample\s*\.pdf(?:,\s*Page:\s*)?\]/gi, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function stripSubjectCodes(input: string): string {
@@ -76,7 +97,8 @@ function normalizeAssistantParagraph(input: string): string {
 }
 
 export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): string {
-  const lines = input.split("\n");
+  const normalizedInput = cleanAcademicNoise ? cleanAssistantDisplayText(input) : input;
+  const lines = normalizedInput.split("\n");
   const chunks: string[] = [];
   let inCodeBlock = false;
   let codeBuffer: string[] = [];
@@ -171,9 +193,28 @@ export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): s
   closeListIfOpen();
 
   return DOMPurify.sanitize(chunks.join(""), {
-    ALLOWED_TAGS: ["h1", "h2", "h3", "p", "ul", "ol", "li", "code", "pre", "strong", "em", "a", "br"],
-    ALLOWED_ATTR: ["href", "target", "rel"],
+    ALLOWED_TAGS: ["h1", "h2", "h3", "p", "ul", "ol", "li", "code", "pre", "strong", "em", "a", "br", "span"],
+    ALLOWED_ATTR: ["href", "target", "rel", "class", "title"],
   });
+}
+
+function extractValidCitations(input: string): Array<{ file: string; page?: string }> {
+  const citations: Array<{ file: string; page?: string }> = [];
+  const matches = cleanAssistantDisplayText(input).matchAll(/\[Source:\s*([^,\]]+)(?:,\s*Page:\s*(\d+))?\]/gi);
+
+  for (const match of matches) {
+    const file = match[1].trim();
+    const page = match[2]?.trim();
+    const isPlaceholderFile = /^RAG sample\s*\.pdf$/i.test(file);
+    if (!file || isPlaceholderFile) {
+      continue;
+    }
+    citations.push({ file, page });
+  }
+
+  return citations.filter(
+    (value, index, self) => self.findIndex((item) => item.file === value.file && item.page === value.page) === index,
+  );
 }
 
 const ChatPage = () => {
@@ -336,6 +377,11 @@ const ChatPage = () => {
               if (parsed.type === "token") {
                 botText += parsed.content;
                 updateMessage(activeChatId, botMsgId, sanitizeText(botText));
+              } else if (parsed.type === "score") {
+                logTelemetry("chat.rag_score_received", {
+                  score: parsed.score,
+                  confidence: parsed.confidence,
+                });
               } else if (parsed.type === "error") {
                 throw new ApiError(parsed.content || "An unexpected error occurred.", 500, "STREAM_ERROR");
               }
@@ -355,6 +401,11 @@ const ChatPage = () => {
             if (parsed.type === "token") {
               botText += parsed.content;
               updateMessage(activeChatId, botMsgId, sanitizeText(botText));
+            } else if (parsed.type === "score") {
+              logTelemetry("chat.rag_score_received", {
+                score: parsed.score,
+                confidence: parsed.confidence,
+              });
             } else if (parsed.type === "error") {
               throw new ApiError(parsed.content || "An unexpected error occurred.", 500, "STREAM_ERROR");
             }
@@ -544,6 +595,32 @@ const ChatPage = () => {
                     className="markdown-content text-inherit [&_a]:underline [&_a]:decoration-current [&_a:hover]:opacity-80 [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/10 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_h1]:mb-3 [&_h1]:mt-1 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:mt-1 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:mt-1 [&_h3]:text-base [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-6"
                     dangerouslySetInnerHTML={{ __html: markdownToSafeHtml(msg.content, msg.role === "assistant") }}
                   />
+                  {msg.role === "assistant" && (() => {
+                    const uniqueCitations = extractValidCitations(msg.content);
+
+                    return (
+                      <>
+                        {uniqueCitations.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-border">
+                            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Sources & Citations</div>
+                            <div className="flex flex-wrap gap-2">
+                              {uniqueCitations.map((cit, idx) => (
+                                <div
+                                  key={idx}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-card border border-border hover:bg-accent/50 transition-all select-none cursor-default shadow-sm"
+                                  title={`Source document: ${cit.file}${cit.page ? `, Page ${cit.page}` : ""}`}
+                                >
+                                  <span className="text-muted-foreground">📄</span>
+                                  <span className="font-semibold text-foreground truncate max-w-[150px]">{cit.file}</span>
+                                  {cit.page && <span className="text-muted-foreground ml-1">Page {cit.page}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             ))}

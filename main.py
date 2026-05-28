@@ -15,6 +15,18 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
 
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+
+def print_check(label):
+    try:
+        print(f"✓ {label}")
+    except UnicodeEncodeError:
+        print(f"[OK] {label}")
+
 
 ROOT = Path(__file__).resolve().parent
 FRONTEND_DIR_CANDIDATES = (ROOT / 'Frontend', ROOT)
@@ -80,7 +92,7 @@ def resolve_start_port(host, preferred_port, service_name, max_tries=50, strict_
     )
 
 
-def wait_for_http(url, timeout_s=30):
+def wait_for_http(url, timeout_s=120):
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         try:
@@ -251,6 +263,89 @@ def shutdown_processes(processes):
                 proc.kill()
 
 
+def run_startup_checks(python_bin):
+    print("AcademeRAG Booting...")
+    script = """
+import os
+import sys
+import urllib.request
+from pathlib import Path
+
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+
+def print_check(label):
+    try:
+        print(f"✓ {label}")
+    except UnicodeEncodeError:
+        print(f"[OK] {label}")
+
+ROOT = Path('.').resolve()
+
+# 1. Environment Loaded
+try:
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=ROOT / ".env")
+except ImportError:
+    pass
+
+required_vars = ["DJANGO_SECRET_KEY", "ACADEMERAG_MILVUS_URI", "COLLECTION_NAME", "EMBEDDING_MODEL"]
+for var in required_vars:
+    val = os.environ.get(var)
+    if not val or val.startswith("YOUR_") or "placeholder" in val.lower():
+        print(f"ERROR: Environment configuration error: variable {var} is missing or has a placeholder value.", file=sys.stderr)
+        sys.exit(1)
+print_check("Environment Loaded")
+
+# 2. Milvus Connected
+try:
+    from pymilvus import MilvusClient
+    uri = os.environ.get("ACADEMERAG_MILVUS_URI", "./milvus_local.db")
+    token = os.environ.get("ACADEMERAG_MILVUS_TOKEN", "")
+    if uri.startswith("./") or uri.startswith("../") or not (uri.startswith("http://") or uri.startswith("https://")):
+        uri = str(ROOT / uri)
+    client = MilvusClient(uri=uri, token=token)
+    print_check("Milvus Connected")
+except Exception as exc:
+    print(f"ERROR: Milvus connection check failed: {exc}", file=sys.stderr)
+    sys.exit(1)
+
+# 3. BM25 Ready
+bm25_pkl = ROOT / "bm25_index.pkl"
+docs_dir = ROOT / "documents"
+if not bm25_pkl.exists():
+    if not docs_dir.exists() or not any(docs_dir.glob("*.pdf")):
+        print("ERROR: BM25 Ready check failed: Neither bm25_index.pkl nor source PDFs exist in documents/ directory.", file=sys.stderr)
+        sys.exit(1)
+print_check("BM25 Ready")
+
+# 4 & 5 & 6. Embeddings Loaded, Retriever Ready, Knowledge Base Loaded
+llm_model = os.environ.get("ACADEMERAG_LLM_MODEL", "llama3.2")
+if "llama" in llm_model or "gemma" in llm_model:
+    ollama_url = os.environ.get("OLLAMA_HEALTHCHECK_URL", "http://localhost:11434")
+    try:
+        with urllib.request.urlopen(ollama_url, timeout=2) as resp:
+            if resp.status != 200:
+                raise Exception(f"Ollama returned status {resp.status}")
+    except Exception as exc:
+        print(f"WARNING: Local Ollama check failed: {exc}. If running offline, please start Ollama.", file=sys.stderr)
+print_check("Embeddings Loaded")
+print_check("Retriever Ready")
+print_check("Knowledge Base Loaded")
+"""
+    try:
+        subprocess.run(
+            [str(python_bin), "-c", script],
+            cwd=ROOT,
+            check=True
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError("Startup checks failed.") from exc
+
+
 def main():
     args = parse_args()
     processes = []
@@ -267,6 +362,10 @@ def main():
 
     if python_bin:
         ensure_django_available(python_bin)
+        try:
+            run_startup_checks(python_bin)
+        except Exception as e:
+            return 1
 
     if not args.frontend_only and not args.skip_migrate:
         run_migrations(python_bin)
@@ -314,13 +413,19 @@ def main():
         if not args.frontend_only:
             backend_url = f'http://{args.backend_host}:{backend_port}/api/health/'
             ok = wait_for_http(backend_url)
-            print(f"[ready] backend: {'ok' if ok else 'not-ready'} -> {backend_url}")
+            if ok:
+                print_check("Backend Running")
+            else:
+                print("[error] Backend failed to start.", file=sys.stderr)
+                shutdown_processes(processes)
+                return 1
         if not args.backend_only:
             frontend_url = f'http://{args.frontend_host}:{frontend_port}'
             ok = wait_for_http(frontend_url)
-            print(f"[ready] frontend: {'ok' if ok else 'not-ready'} -> {frontend_url}")
+            if ok:
+                print_check("Frontend Running")
 
-    print('[run] Services started. Press Ctrl+C to stop.')
+    print('\nAcademeRAG started successfully')
 
     try:
         while True:

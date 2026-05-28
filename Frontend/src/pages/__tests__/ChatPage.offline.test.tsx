@@ -58,4 +58,25 @@ describe("ChatPage offline behavior", () => {
       screen.getByText(/internet appears offline\. academerag requests can still work/i),
     ).toBeInTheDocument();
   });
+
+  it("does not show backend RAG score fields in the chat surface", async () => {
+    const chatId = useChatStore.getState().createChat();
+    useChatStore.getState().appendMessage(chatId, {
+      id: "assistant-scored",
+      role: "assistant",
+      content: "Grounded answer.",
+      ragScore: 38.1,
+      ragConfidence: "Weak",
+    });
+
+    render(
+      <MemoryRouter>
+        <ChatPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Grounded answer.")).toBeInTheDocument();
+    expect(screen.queryByText(/RAG Score/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Confidence:/i)).not.toBeInTheDocument();
+  });
 });

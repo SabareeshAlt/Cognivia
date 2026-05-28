@@ -10,7 +10,9 @@ import threading
 import time
 try:
     import magic
-except ImportError:
+    # Test if magic actually works (specifically on Windows where python-magic can be installed but missing DLLs)
+    magic.from_file(__file__)
+except Exception:
     import sys
     from types import ModuleType
     dummy_magic = ModuleType("magic")
@@ -764,12 +766,27 @@ def ensure_collection_schema(cfg: dict, embeddings, recreate: bool = False) -> b
     _wait_for_collection_presence(client, cfg["collection"])
 
     # Add scalar indexes for these fields using client.create_index() to optimize metadata filtering.
-    scalar_index_params = MilvusClient.prepare_index_params()
-    scalar_index_params.add_index(field_name="source", index_name="source_idx")
-    scalar_index_params.add_index(field_name="page_number", index_name="page_number_idx")
-    scalar_index_params.add_index(field_name="chunk_index", index_name="chunk_index_idx")
-    
-    client.create_index(collection_name=cfg["collection"], index_params=scalar_index_params)
+    try:
+        client.create_index(
+            collection_name=cfg["collection"],
+            field_name="source",
+            index_name="source_idx",
+            index_type="INVERTED"
+        )
+        client.create_index(
+            collection_name=cfg["collection"],
+            field_name="page_number",
+            index_name="page_number_idx",
+            index_type="INVERTED"
+        )
+        client.create_index(
+            collection_name=cfg["collection"],
+            field_name="chunk_index",
+            index_name="chunk_index_idx",
+            index_type="INVERTED"
+        )
+    except Exception as e:
+        logger.warning(f"Failed to create scalar indexes: {e}")
     
     return True
 
@@ -855,6 +872,8 @@ def _refresh_fallback_cache() -> None:
         _fallback_cache_state["signature"] = signature
         _fallback_cache_state["inflight"] = False
 
+    _build_adjacency_map(docs)
+
     try:
         import filelock
         lock = filelock.FileLock(BM25_INDEX_FILE + ".lock")
@@ -884,6 +903,7 @@ def _load_persisted_bm25() -> bool:
                 _fallback_cache_state["stats"] = data["stats"]
                 _fallback_cache_state["signature"] = data["signature"]
                 _fallback_cache_state["inflight"] = False
+            _build_adjacency_map(data["corpus"])
             return True
     except Exception as e:
         logger.warning(f"Failed to load persisted BM25 index: {e}")
@@ -1051,93 +1071,37 @@ def _fallback_retrieve_docs(question: str, k: int, target_sources: set[str] | No
 _adjacency_map = {}
 _adjacency_map_lock = threading.Lock()
 
-def _build_adjacency_map(corpus):
+def _build_adjacency_map(corpus) -> None:
     local_map = {}
     for doc in corpus:
         metadata = doc.metadata or {}
         document_path = metadata.get("document_path")
-        page_number = metadata.get("page_number")
         chunk_index = metadata.get("chunk_index")
-        if document_path and isinstance(page_number, int) and isinstance(chunk_index, int):
-            local_map[(document_path, page_number, chunk_index)] = doc
+        if document_path is not None and chunk_index is not None:
+            local_map[(document_path, int(chunk_index))] = doc
             
     with _adjacency_map_lock:
         global _adjacency_map
         _adjacency_map = local_map
 
-def _expand_neighbor_chunks(doc: Document, milvus_client, collection_name: str) -> List[Document]:
-    """
-    Query Milvus for neighboring chunks (i-1 and i+1) based on metadata filtering.
-    """
-    metadata = doc.metadata or {}
-    source = metadata.get("source")
-    chunk_index = metadata.get("chunk_index")
-    
-    # If we don't have enough metadata to find neighbors, return the original doc
-    if source is None or chunk_index is None:
-        return [doc]
-        
-    target_indices = [chunk_index - 1, chunk_index + 1]
-    target_indices = [i for i in target_indices if i >= 0]
-    
-    if not target_indices:
-        return [doc]
-        
-    # Escape source string for the Milvus expression
-    escaped_source = source.replace("\\", "\\\\").replace('"', '\\"')
-    
-    # Construct the PyMilvus query expression
-    expr = f'source == "{escaped_source}" and chunk_index in {target_indices}'
-    
-    try:
-        # Request all known metadata fields along with the text
-        output_fields = ["text"] + list(metadata.keys())
-        
-        results = milvus_client.query(
-            collection_name=collection_name,
-            filter=expr,
-            output_fields=output_fields
-        )
-        
-        neighbors = []
-        for res in results:
-            text = res.pop("text", "")
-            # Remove Milvus specific fields if they were fetched
-            res.pop("pk", None)
-            res.pop("vector", None)
-            neighbors.append(Document(page_content=text, metadata=res))
-            
-        # Combine the original document with its neighbors
-        all_docs = [doc] + neighbors
-
-        # Sort by chunk_index to maintain reading order
-        all_docs.sort(key=lambda x: x.metadata.get("chunk_index", 0))
-
-        return all_docs
-
-    except Exception as e:
-        logger.warning("Failed to expand neighbor chunks for %s (index %s): %s", source, chunk_index, e)
-        return [doc]
-
 
 def _expand_neighbors_from_corpus(docs: list[Document], include_adjacent: bool = True) -> list[Document]:
     """
     Expand retrieved docs with their immediately adjacent chunks from the BM25 corpus.
-    Uses the in-memory corpus so no Milvus round-trip is needed.
+    Uses the cached pre-built adjacency map to avoid rebuilding lookup on every query.
     Deduplicates and preserves all original docs.
     """
-    corpus = _fallback_chunk_corpus()
-    if not corpus:
-        return docs
-
-    # Build lookup: (document_path, chunk_index) -> Document
-    lookup: dict[tuple, Document] = {}
-    for corp_doc in corpus:
-        meta = corp_doc.metadata or {}
-        dp = meta.get("document_path")
-        ci = meta.get("chunk_index")
-        if dp is not None and ci is not None:
-            lookup[(dp, int(ci))] = corp_doc
+    with _adjacency_map_lock:
+        lookup = _adjacency_map
+        
+    if not lookup:
+        corpus = _fallback_chunk_corpus()
+        if corpus:
+            _build_adjacency_map(corpus)
+            with _adjacency_map_lock:
+                lookup = _adjacency_map
+        if not lookup:
+            return docs
 
     seen_keys: set[tuple] = set()
     result: list[Document] = []
@@ -1596,6 +1560,10 @@ def _get_deployment_mode() -> str:
         return mode.strip().lower()
     if _env_bool("ACADEMERAG_ENABLE_MILVUS_CLOUD", default=False):
         return "cloud"
+    # Auto-detect cloud mode if the URI starts with http://, https://, or tcp://
+    uri = os.getenv("ACADEMERAG_MILVUS_URI", "")
+    if uri.startswith("http://") or uri.startswith("https://") or uri.startswith("tcp://"):
+        return "cloud"
     return "local"
 
 def _get_cloud_config() -> dict | None:
@@ -1611,12 +1579,10 @@ def _get_local_config() -> dict:
         "model": EMBEDDING_MODEL,
     }
 
-def _search_milvus_with_config(cfg: dict, question: str, k: int, target_sources: set[str] | None, timeout_sec: float) -> list[Document]:
+def _search_milvus_with_config(cfg: dict, query_vector: list[float], k: int, target_sources: set[str] | None, timeout_sec: float) -> list[Document]:
     if not cfg:
         return []
     source_expr = _milvus_source_filter_expr(target_sources or set())
-    embeddings = OllamaEmbeddings(model=cfg["model"], base_url=OLLAMA_BASE_URL)
-    query_vector = embeddings.embed_query(question)
     client = _connect_milvus_client_with_timeout(cfg, timeout_seconds=timeout_sec)
     search_kwargs = {
         "collection_name": cfg["collection"],
@@ -1650,7 +1616,7 @@ def _search_milvus_with_config(cfg: dict, question: str, k: int, target_sources:
         docs.append(Document(page_content=text, metadata=metadata))
     return _filter_docs_by_sources(docs, target_sources or set())
 
-def _search_cloud_milvus(question: str, k: int, target_sources: set[str] | None) -> list[Document]:
+def _search_cloud_milvus(query_vector: list[float], question: str, k: int, target_sources: set[str] | None) -> list[Document]:
     logger.info("CLOUD_SEARCH_STARTED | request_id=- | query='%s'", question)
     start_time = time.perf_counter()
     
@@ -1667,13 +1633,13 @@ def _search_cloud_milvus(question: str, k: int, target_sources: set[str] | None)
     else:
         logger.info("CIRCUIT_BREAKER_STATE | status='closed'")
 
-    timeout_sec = 1.5
+    timeout_sec = 5.0
     
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     try:
         future = executor.submit(
             _search_milvus_with_config, 
-            cfg, question, k, target_sources, timeout_sec
+            cfg, query_vector, k, target_sources, timeout_sec
         )
         docs = future.result(timeout=timeout_sec + 1.0)
         
@@ -1707,7 +1673,7 @@ def _search_cloud_milvus(question: str, k: int, target_sources: set[str] | None)
         except TypeError:
             executor.shutdown(wait=False)
 
-def _search_local_milvus(question: str, k: int, target_sources: set[str] | None) -> list[Document]:
+def _search_local_milvus(query_vector: list[float], question: str, k: int, target_sources: set[str] | None) -> list[Document]:
     logger.info("LOCAL_SEARCH_STARTED | request_id=- | query='%s'", question)
     start_time = time.perf_counter()
     
@@ -1718,7 +1684,7 @@ def _search_local_milvus(question: str, k: int, target_sources: set[str] | None)
     try:
         future = executor.submit(
             _search_milvus_with_config, 
-            cfg, question, k, target_sources, timeout_sec
+            cfg, query_vector, k, target_sources, timeout_sec
         )
         docs = future.result(timeout=timeout_sec + 1.0)
         
@@ -2105,13 +2071,24 @@ def _dense_search_pipeline(question: str, k: int, target_sources: Optional[Set[s
     Tries Milvus Cloud first, falls back to local Milvus if Cloud returns no results or fails.
     """
     start_time = time.perf_counter()
-    docs = _search_cloud_milvus(question, k, target_sources)
+    
+    cfg = _get_milvus_config()
+    query_vector = []
+    if cfg:
+        try:
+            embeddings = OllamaEmbeddings(model=cfg["model"], base_url=OLLAMA_BASE_URL)
+            query_vector = embeddings.embed_query(question)
+        except Exception as exc:
+            logger.error("Failed to generate query embeddings: %s", exc)
+            
+    docs = []
     fallback_used = False
-    
-    if not docs:
-        docs = _search_local_milvus(question, k, target_sources)
-        fallback_used = True
-    
+    if query_vector:
+        docs = _search_cloud_milvus(query_vector, question, k, target_sources)
+        if not docs:
+            docs = _search_local_milvus(query_vector, question, k, target_sources)
+            fallback_used = True
+            
     latency_ms = (time.perf_counter() - start_time) * 1000
     logger.info("DENSE_PIPELINE_COMPLETED | query='%s' | latency_ms=%.1f | chunk_count=%d | fallback_used=%s", 
                 question, latency_ms, len(docs), fallback_used)

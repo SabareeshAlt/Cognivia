@@ -265,10 +265,10 @@ RESPONSE GUIDELINES
      provide what you can. State clearly what is supported and what is uncertain.
    - Only reply "Not found in the provided documents." when the context contains
      NO relevant information at all for the question.
+3. SOURCE CITATIONS IN OUTPUT
+   - Provide precise citations for your claims in the format `[Source: filename, Page: number]` immediately following the statement that utilizes the information (e.g., `[Source: RAG sample 1.pdf, Page: 4]`).
+   - Do NOT construct fake citations; only cite the exact source and page number from the context block.
 
-3. NO SOURCE CITATIONS IN OUTPUT
-   - Do NOT include file names, page numbers, section headers, or [Source: ...] markers.
-   - Output only the clean answer text.
 
 4. ACCURACY
    - Do NOT fabricate details, statistics, or names not present in the context.
@@ -418,62 +418,24 @@ def _set_cached_query(question: str, response: str) -> None:
 # ─── Citation Cleaning ────────────────────────────────────────────────────────
 
 def clean_citations(text: str) -> str:
-    """Remove inline [Source: ...] markers that occasionally leak through."""
+    """Normalize whitespace and excess newlines, preserving citation markers."""
     import re
-    text = re.sub(r'\[Source:\s*[^\]]*\]', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'(?i)^\s*source:\s*.*$', '', text, flags=re.MULTILINE)
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
 
 
 def stream_clean_citations_filter(generator):
     """
-    Streaming filter that strips [Source: ...] citation markers token-by-token
-    without buffering the entire response.
+    Streaming filter pass-through to support citation rendering.
     """
-    buffer = ""
-    in_bracket = False
-
     for chunk in generator:
-        if not chunk:
-            continue
-        for char in chunk:
-            if char == '[':
-                if buffer:
-                    yield buffer
-                    buffer = ""
-                in_bracket = True
-                buffer += char
-            elif char == ']':
-                if in_bracket:
-                    buffer += char
-                    lower_buf = buffer.lower()
-                    if lower_buf.startswith("[source:") or "source:" in lower_buf:
-                        buffer = ""  # discard citation
-                    else:
-                        yield buffer
-                        buffer = ""
-                    in_bracket = False
-                else:
-                    yield char
-            else:
-                if in_bracket:
-                    buffer += char
-                    lower_buf = buffer.lower()
-                    prefix = "[source:"
-                    if len(buffer) > 150 or not prefix.startswith(lower_buf[: len(prefix)]):
-                        yield buffer
-                        buffer = ""
-                        in_bracket = False
-                else:
-                    yield char
-    if buffer:
-        yield buffer
+        yield chunk
+
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 
-def get_optimized_response(question: str) -> str:
+def get_optimized_response(question: str, return_score: bool = False) -> str:
     """
     Non-streaming end-to-end RAG response.
     Logs structured telemetry at every layer: query → retrieval → context → generation.
@@ -485,6 +447,11 @@ def get_optimized_response(question: str) -> str:
     cached = _get_cached_query(question)
     if cached:
         logger.info("CACHE_HIT | query='%s'", question)
+        if return_score:
+            # Re-run scoring for cache hits based on empty retrieved docs
+            from rag.scoring import compute_pipeline_score
+            score_payload = compute_pipeline_score(question, cached, [])
+            return cached, score_payload
         return cached
 
     # ── Retrieval ─────────────────────────────────────────────────────────────
@@ -500,6 +467,10 @@ def get_optimized_response(question: str) -> str:
     if not docs:
         logger.warning("RETRIEVAL_EMPTY | query='%s' — returning insufficient context message", question)
         _set_cached_query(question, INSUFFICIENT_CONTEXT_MESSAGE)
+        if return_score:
+            from rag.scoring import compute_pipeline_score
+            score_payload = compute_pipeline_score(question, INSUFFICIENT_CONTEXT_MESSAGE, [])
+            return INSUFFICIENT_CONTEXT_MESSAGE, score_payload
         return INSUFFICIENT_CONTEXT_MESSAGE
 
     # ── Context Assembly ──────────────────────────────────────────────────────
@@ -526,6 +497,21 @@ def get_optimized_response(question: str) -> str:
     logger.info("REQUEST_COMPLETE | total_ms=%.1f", total_ms)
 
     _set_cached_query(question, cleaned)
+    
+    if return_score:
+        from rag.scoring import compute_pipeline_score
+        score_payload = compute_pipeline_score(question, cleaned, docs)
+        logger.info(
+            "RAG_SCORE | score=%.1f | confidence=%s | retrieval=%.1f | coverage=%.1f | grounding=%.1f | citation=%.1f",
+            score_payload["final_rag_score"],
+            score_payload["confidence_label"],
+            score_payload["retrieval_relevance_score"],
+            score_payload["context_coverage_score"],
+            score_payload["answer_grounding_score"],
+            score_payload["citation_confidence_score"],
+        )
+        return cleaned, score_payload
+
     return cleaned
 
 
@@ -555,6 +541,10 @@ def stream_optimized_response(question: str):
         if not docs:
             logger.warning("RETRIEVAL_EMPTY | query='%s'", question)
             yield f'data: {json.dumps({"type": "token", "content": "I couldn\'t find relevant content in the knowledge base."})}\n\n'
+            # Yield zero score payload
+            from rag.scoring import compute_pipeline_score
+            score_payload = compute_pipeline_score(question, "I couldn't find relevant content in the knowledge base.", [])
+            yield f'data: {json.dumps({"type": "score", "score": score_payload["final_rag_score"], "confidence": score_payload["confidence_label"], "metrics": score_payload})}\n\n'
             yield f'data: {json.dumps({"type": "done", "content": ""})}\n\n'
             return
 
@@ -576,12 +566,30 @@ def stream_optimized_response(question: str):
         first_token_emitted = False
         raw_stream = _stream_with_provider_failover(context=context, question=question)
 
+        full_answer = ""
         for chunk in stream_clean_citations_filter(raw_stream):
             if not first_token_emitted:
                 ttft_ms = (time.perf_counter() - wall_start) * 1000
                 logger.info("FIRST_TOKEN_STREAMED | ttft_ms=%.1f", ttft_ms)
                 first_token_emitted = True
+            full_answer += chunk
             yield f'data: {json.dumps({"type": "token", "content": chunk})}\n\n'
+
+        # Compute RAG pipeline score
+        from rag.scoring import compute_pipeline_score
+        score_payload = compute_pipeline_score(question, full_answer, docs)
+        logger.info(
+            "RAG_SCORE | score=%.1f | confidence=%s | retrieval=%.1f | coverage=%.1f | grounding=%.1f | citation=%.1f",
+            score_payload["final_rag_score"],
+            score_payload["confidence_label"],
+            score_payload["retrieval_relevance_score"],
+            score_payload["context_coverage_score"],
+            score_payload["answer_grounding_score"],
+            score_payload["citation_confidence_score"],
+        )
+        
+        # Yield score chunk
+        yield f'data: {json.dumps({"type": "score", "score": score_payload["final_rag_score"], "confidence": score_payload["confidence_label"], "metrics": score_payload})}\n\n'
 
         yield f'data: {json.dumps({"type": "done", "content": ""})}\n\n'
         total_ms = (time.perf_counter() - wall_start) * 1000
@@ -593,3 +601,4 @@ def stream_optimized_response(question: str):
             "STREAM_ABORTED | error='%s' | total_ms=%.1f", exc, total_ms, exc_info=True
         )
         raise exc
+

@@ -21,8 +21,8 @@ from pymilvus.exceptions import MilvusException
 logger = logging.getLogger(__name__)
 
 
-def _http_headers(api_key: str):
-    return {
+def _http_headers(api_key: str, db_name: str = ""):
+    headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_7_0) AppleWebKit/535.11 (KHTML, like Gecko) "
         "Chrome/17.0.963.56 Safari/535.11",
         "Accept": "application/json",
@@ -30,6 +30,9 @@ def _http_headers(api_key: str):
         "Accept-Languag": "en-US,en;q=0.5",
         "Authorization": f"Bearer {api_key}",
     }
+    if db_name:
+        headers["DB-Name"] = db_name
+    return headers
 
 
 def _throw(msg: str):
@@ -68,10 +71,11 @@ def _post_request(
     Returns:
         requests.Response: Response object.
     """
+    db_name = kwargs.pop("db_name", "")
     try:
         resp = requests.post(
             url=url,
-            headers=_http_headers(api_key),
+            headers=_http_headers(api_key, db_name),
             json=params,
             timeout=timeout,
             verify=verify,
@@ -110,6 +114,8 @@ def bulk_import(
     object_url: str = "",
     object_urls: Optional[List[List[str]]] = None,
     cluster_id: str = "",
+    project_id: str = "",
+    region_id: str = "",
     api_key: str = "",
     access_key: str = "",
     secret_key: str = "",
@@ -132,6 +138,8 @@ def bulk_import(
         api_key (str): API key to authenticate your requests
 
         cluster_id (str): id of a milvus instance(cloud)
+        project_id (str): id of a project(cloud, for project database)
+        region_id (str): id of a region(cloud, for project database)
         object_url (str): The object URL of the object to import(cloud), use `object_urls` instead.
         object_urls (list of list of str): The object urls that contain the data to import.
              A sub-list contains a single object url
@@ -195,6 +203,24 @@ def bulk_import(
         ...         ["parquet-folder-2/"]
         ...     ]
         ... )
+
+        >>> # 4. Import multiple files or folders into a Zilliz Cloud project database
+        >>> bulk_import(
+        ...     url="https://api.cloud.zilliz.com", # If regions in China, it is: https://api.cloud.zilliz.com.cn
+        ...     api_key="YOUR_API_KEY",
+        ...     project_id="proj-xxx",
+        ...     region_id="aws-us-west-2",
+        ...     collection_name="my_collection",
+        ...     partition_name="", # If Collection not enable partitionKey, can be specified.
+        ...     object_urls=[
+        ...         ["s3://bucket-name/parquet-folder-1/1.parquet"],
+        ...         ["s3://bucket-name/parquet-folder-2/1.parquet"],
+        ...         ["s3://bucket-name/parquet-folder-3/"]
+        ...     ],
+        ...     access_key="your-access-key",
+        ...     secret_key="your-secret-key",
+        ...     token="your-token" # for short-term credentials, also include `token`
+        ... )
     """
     request_url = url + "/v2/vectordb/jobs/import/create"
 
@@ -207,6 +233,8 @@ def bulk_import(
         "objectUrl": object_url,
         "objectUrls": object_urls,
         "clusterId": cluster_id,
+        "projectId": project_id,
+        "regionId": region_id,
         "accessKey": access_key,
         "secretKey": secret_key,
         "token": token,
@@ -219,7 +247,13 @@ def bulk_import(
         params["options"] = options
 
     resp = _post_request(
-        url=request_url, api_key=api_key, params=params, verify=verify, cert=cert, **kwargs
+        url=request_url,
+        api_key=api_key,
+        params=params,
+        verify=verify,
+        cert=cert,
+        db_name=db_name,
+        **kwargs,
     )
     _handle_response(request_url, resp.json())
     return resp
@@ -229,7 +263,10 @@ def get_import_progress(
     url: str,
     job_id: str,
     cluster_id: str = "",
+    project_id: str = "",
+    region_id: str = "",
     api_key: str = "",
+    db_name: str = "",
     verify: Optional[Union[bool, str]] = True,
     cert: Optional[Union[str, tuple]] = None,
     **kwargs,
@@ -240,7 +277,10 @@ def get_import_progress(
         url (str): url of the server
         job_id (str): a job id
         cluster_id (str): id of a milvus instance(for cloud)
+        project_id (str): id of a project(cloud, for project database)
+        region_id (str): id of a region(cloud, for project database)
         api_key (str): API key to authenticate your requests.
+        db_name (str): database name, sent via DB-Name header for RBAC
         verify (bool, str, optional): Either a boolean, to verify the server's TLS certificate
              or a string, which must be server's certificate path. Defaults to `True`.
         cert (str, tuple, optional): if String, path to ssl client cert file.
@@ -254,10 +294,18 @@ def get_import_progress(
     params = {
         "jobId": job_id,
         "clusterId": cluster_id,
+        "projectId": project_id,
+        "regionId": region_id,
     }
 
     resp = _post_request(
-        url=request_url, api_key=api_key, params=params, verify=verify, cert=cert, **kwargs
+        url=request_url,
+        api_key=api_key,
+        params=params,
+        verify=verify,
+        cert=cert,
+        db_name=db_name,
+        **kwargs,
     )
     _handle_response(request_url, resp.json())
     return resp
@@ -268,6 +316,8 @@ def list_import_jobs(
     collection_name: str = "",
     db_name: str = "",
     cluster_id: str = "",
+    project_id: str = "",
+    region_id: str = "",
     api_key: str = "",
     page_size: int = 10,
     current_page: int = 1,
@@ -281,6 +331,8 @@ def list_import_jobs(
         url (str): url of the server
         collection_name (str): name of the target collection
         cluster_id (str): id of a milvus instance(for cloud)
+        project_id (str): id of a project(cloud, for project database)
+        region_id (str): id of a region(cloud, for project database)
         api_key (str): API key to authenticate your requests.
         page_size (int): pagination size
         current_page (int): pagination
@@ -298,12 +350,20 @@ def list_import_jobs(
         "collectionName": collection_name,
         "dbName": db_name,
         "clusterId": cluster_id,
+        "projectId": project_id,
+        "regionId": region_id,
         "pageSize": page_size,
         "currentPage": current_page,
     }
 
     resp = _post_request(
-        url=request_url, api_key=api_key, params=params, verify=verify, cert=cert, **kwargs
+        url=request_url,
+        api_key=api_key,
+        params=params,
+        verify=verify,
+        cert=cert,
+        db_name=db_name,
+        **kwargs,
     )
     _handle_response(request_url, resp.json())
     return resp

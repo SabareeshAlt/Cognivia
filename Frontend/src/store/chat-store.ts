@@ -5,6 +5,8 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  ragScore?: number;
+  ragConfidence?: string;
 }
 
 export interface ChatSession {
@@ -20,7 +22,13 @@ interface ChatState {
   setActiveChat: (chatId: string) => void;
   deleteChat: (chatId: string) => void;
   appendMessage: (chatId: string, message: ChatMessage) => void;
-  updateMessage: (chatId: string, messageId: string, content: string) => void;
+  updateMessage: (
+    chatId: string,
+    messageId: string,
+    content: string,
+    ragScore?: number,
+    ragConfidence?: string
+  ) => void;
   updateTitleIfNew: (chatId: string, sourceText: string) => void;
   reset: () => void;
 }
@@ -69,14 +77,21 @@ export const useChatStore = create<ChatState>()(
           ),
         }));
       },
-      updateMessage: (chatId, messageId, content) => {
+      updateMessage: (chatId, messageId, content, ragScore, ragConfidence) => {
         set((state) => ({
           chats: state.chats.map((chat) =>
             chat.id === chatId
               ? {
                   ...chat,
                   messages: chat.messages.map((message) =>
-                    message.id === messageId ? { ...message, content } : message,
+                    message.id === messageId
+                      ? {
+                          ...message,
+                          content,
+                          ...(ragScore !== undefined ? { ragScore } : {}),
+                          ...(ragConfidence !== undefined ? { ragConfidence } : {}),
+                        }
+                      : message,
                   ),
                 }
               : chat,

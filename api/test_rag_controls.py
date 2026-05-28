@@ -4,6 +4,7 @@ from unittest.mock import patch
 import Milvus
 from langchain_core.documents import Document
 from rag.llm_orchestration import get_optimized_response
+from rag.scoring import compute_pipeline_score
 
 
 class RagControlsTests(TestCase):
@@ -17,3 +18,32 @@ class RagControlsTests(TestCase):
 
         self.assertEqual(answer, "Grounded answer")
         mock_invoke.assert_called_once()
+
+    def test_scoring_accepts_page_citations_and_grounded_catalog_answers(self):
+        docs = [
+            Document(
+                page_content=(
+                    "Semester IV Information Technology Professional Elective I "
+                    "Professional Elective II Professional Elective III "
+                    "Employability Enhancement Course Mandatory Course"
+                ),
+                metadata={
+                    "source": "RAG sample 3.pdf",
+                    "page_number": 68,
+                    "score": 18.0,
+                    "rrf_score": 0.0333,
+                    "rerank_score": 4.0,
+                },
+            )
+        ]
+        answer = (
+            "Professional Elective I, Professional Elective II, Professional Elective III, "
+            "Employability Enhancement Course, and Mandatory Course "
+            "[Source: RAG sample 3.pdf, Page 68]"
+        )
+
+        score = compute_pipeline_score("List the semester IV subjects", answer, docs)
+
+        self.assertGreaterEqual(score["final_rag_score"], 90.0)
+        self.assertEqual(score["confidence_label"], "High")
+        self.assertEqual(score["citation_confidence_score"], 100.0)

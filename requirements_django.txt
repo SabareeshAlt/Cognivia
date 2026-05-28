@@ -1,12 +1,12 @@
-# Django Core (Compatible with Python 3.9)
-Django==4.2.11
-djangorestframework==3.14.0
-djangorestframework-simplejwt==5.3.1
-django-cors-headers==4.3.0
-django-ratelimit==4.1.0
-psycopg2-binary==2.9.9
-django-redis==5.4.0
-redis==5.0.1
+# Django Core (Compatible with Python 3.9+)
+Django>=4.2.11
+djangorestframework>=3.14.0
+djangorestframework-simplejwt>=5.3.1
+django-cors-headers>=4.3.0
+django-ratelimit>=4.1.0
+psycopg2-binary>=2.9.9
+django-redis>=5.4.0
+redis>=5.0.1
 
 # RAG and LLM
 langchain>=0.1.0
@@ -18,23 +18,21 @@ groq>=0.4.0
 sentence-transformers>=2.2.2
 tiktoken>=0.5.0
 
-
-
 # Document Processing
-pypdf==4.0.0
-python-magic==0.4.27
+pypdf>=4.0.0
+python-magic>=0.4.27
 
 # Vector Stores
-pymilvus==2.3.0
-langchain-milvus==0.2.0
+pymilvus>=2.4.0
+langchain-milvus>=0.2.0
 milvus-lite>=3.0
 
 # Web Server
 uvicorn[standard]
 
 # Utilities
-python-dotenv==1.0.0
-requests==2.31.0
-django-prometheus==2.3.1
-python-json-logger==2.0.7
+python-dotenv>=1.0.0
+requests>=2.31.0
+django-prometheus>=2.3.1
+python-json-logger>=2.0.7
 filelock>=3.0.0

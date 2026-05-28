@@ -13,7 +13,7 @@ except Exception as e:
     print(f"Failed to setup django: {e}")
     sys.exit(1)
 
-from Milvus import stream_optimized_response
+from rag.llm_orchestration import stream_optimized_response
 
 def main():
     query = "What is the assessment methodology?"

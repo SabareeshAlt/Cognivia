@@ -144,6 +144,8 @@ class HealthEndpointTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["status"], "alive")
         self.assertEqual(payload["service"], "academerag-api")
+        self.assertNotIn("audit", payload)
+        self.assertNotIn("audit_error", payload)
 
     def test_metrics_endpoint_exposes_counters(self):
         self.client.get(reverse("health_live"))

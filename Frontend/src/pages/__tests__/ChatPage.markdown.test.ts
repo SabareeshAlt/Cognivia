@@ -24,4 +24,21 @@ describe("ChatPage markdown cleanup", () => {
     expect(html).not.toMatch(/>\s*1\s+1\s+/);
     expect(html).not.toMatch(/>\s*2\s+2\s+/);
   });
+
+  it("removes empty citation and credit placeholders from assistant output", () => {
+    const raw = [
+      "Semester IV:",
+      "* Probability and Number Theory ( - - - , credits) [Source: RAG sample .pdf, Page: ]",
+      "* Database Management Systems ( - - - , credits) [Source: RAG sample .pdf, Page: ]",
+    ].join("\n");
+
+    const html = markdownToSafeHtml(raw, true);
+
+    expect(html).toContain("Probability and Number Theory");
+    expect(html).toContain("Database Management Systems");
+    expect(html).not.toContain("credits");
+    expect(html).not.toContain("Source:");
+    expect(html).not.toContain("Page:");
+    expect(html).not.toContain("- - -");
+  });
 });

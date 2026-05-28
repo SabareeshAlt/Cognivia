@@ -1,3 +1,4 @@
+import contextlib
 import ipaddress
 import json
 import os
@@ -75,7 +76,7 @@ from ollama._types import (
 T = TypeVar('T')
 
 
-class BaseClient:
+class BaseClient(contextlib.AbstractContextManager, contextlib.AbstractAsyncContextManager):
   def __init__(
     self,
     client,
@@ -116,6 +117,12 @@ class BaseClient:
       **kwargs,
     )
 
+  def __exit__(self, exc_type, exc_val, exc_tb):
+    self.close()
+
+  async def __aexit__(self, exc_type, exc_val, exc_tb):
+    await self.close()
+
 
 CONNECTION_ERROR_MESSAGE = 'Failed to connect to Ollama. Please check that Ollama is downloaded, running and accessible. https://ollama.com/download'
 
@@ -123,6 +130,9 @@ CONNECTION_ERROR_MESSAGE = 'Failed to connect to Ollama. Please check that Ollam
 class Client(BaseClient):
   def __init__(self, host: Optional[str] = None, **kwargs) -> None:
     super().__init__(httpx.Client, host, **kwargs)
+
+  def close(self):
+    self._client.close()
 
   def _request_raw(self, *args, **kwargs):
     try:
@@ -207,6 +217,9 @@ class Client(BaseClient):
     images: Optional[Sequence[Union[str, bytes, Image]]] = None,
     options: Optional[Union[Mapping[str, Any], Options]] = None,
     keep_alive: Optional[Union[float, str]] = None,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
+    steps: Optional[int] = None,
   ) -> GenerateResponse: ...
 
   @overload
@@ -228,6 +241,9 @@ class Client(BaseClient):
     images: Optional[Sequence[Union[str, bytes, Image]]] = None,
     options: Optional[Union[Mapping[str, Any], Options]] = None,
     keep_alive: Optional[Union[float, str]] = None,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
+    steps: Optional[int] = None,
   ) -> Iterator[GenerateResponse]: ...
 
   def generate(
@@ -248,6 +264,9 @@ class Client(BaseClient):
     images: Optional[Sequence[Union[str, bytes, Image]]] = None,
     options: Optional[Union[Mapping[str, Any], Options]] = None,
     keep_alive: Optional[Union[float, str]] = None,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
+    steps: Optional[int] = None,
   ) -> Union[GenerateResponse, Iterator[GenerateResponse]]:
     """
     Create a response using the requested model.
@@ -279,6 +298,9 @@ class Client(BaseClient):
         images=list(_copy_images(images)) if images else None,
         options=options,
         keep_alive=keep_alive,
+        width=width,
+        height=height,
+        steps=steps,
       ).model_dump(exclude_none=True),
       stream=stream,
     )
@@ -702,6 +724,9 @@ class AsyncClient(BaseClient):
   def __init__(self, host: Optional[str] = None, **kwargs) -> None:
     super().__init__(httpx.AsyncClient, host, **kwargs)
 
+  async def close(self):
+    await self._client.aclose()
+
   async def _request_raw(self, *args, **kwargs):
     try:
       r = await self._client.request(*args, **kwargs)
@@ -825,6 +850,9 @@ class AsyncClient(BaseClient):
     images: Optional[Sequence[Union[str, bytes, Image]]] = None,
     options: Optional[Union[Mapping[str, Any], Options]] = None,
     keep_alive: Optional[Union[float, str]] = None,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
+    steps: Optional[int] = None,
   ) -> GenerateResponse: ...
 
   @overload
@@ -846,6 +874,9 @@ class AsyncClient(BaseClient):
     images: Optional[Sequence[Union[str, bytes, Image]]] = None,
     options: Optional[Union[Mapping[str, Any], Options]] = None,
     keep_alive: Optional[Union[float, str]] = None,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
+    steps: Optional[int] = None,
   ) -> AsyncIterator[GenerateResponse]: ...
 
   async def generate(
@@ -866,6 +897,9 @@ class AsyncClient(BaseClient):
     images: Optional[Sequence[Union[str, bytes, Image]]] = None,
     options: Optional[Union[Mapping[str, Any], Options]] = None,
     keep_alive: Optional[Union[float, str]] = None,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
+    steps: Optional[int] = None,
   ) -> Union[GenerateResponse, AsyncIterator[GenerateResponse]]:
     """
     Create a response using the requested model.
@@ -896,6 +930,9 @@ class AsyncClient(BaseClient):
         images=list(_copy_images(images)) if images else None,
         options=options,
         keep_alive=keep_alive,
+        width=width,
+        height=height,
+        steps=steps,
       ).model_dump(exclude_none=True),
       stream=stream,
     )

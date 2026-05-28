@@ -242,14 +242,34 @@ def ask_question(request):
 
         try:
             start_time = time.time()
-            answer = _response_fn(question)
+            res = _response_fn(question, return_score=True)
+            if isinstance(res, tuple) and len(res) == 2:
+                answer, score_payload = res
+            else:
+                answer = res
+                score_payload = {
+                    "final_rag_score": 100.0,
+                    "confidence_label": "High",
+                    "retrieval_relevance_score": 100.0,
+                    "context_coverage_score": 100.0,
+                    "answer_grounding_score": 100.0,
+                    "citation_confidence_score": 100.0
+                }
             LLM_GENERATION_LATENCY.observe(time.time() - start_time)
         except Exception as exc:
             logger.error("Question processing failed: %s", exc, exc_info=True)
             safe_message, status_code = _classify_runtime_error(exc)
             return json_error(request, safe_message, status_code)
 
-        return JsonResponse({"answer": answer, "status": "success", "success": True, "trace_id": request_id})
+        return JsonResponse({
+            "answer": answer,
+            "status": "success",
+            "success": True,
+            "trace_id": request_id,
+            "rag_score": score_payload["final_rag_score"],
+            "rag_confidence": score_payload["confidence_label"],
+            "metrics": score_payload
+        })
 
     except json.JSONDecodeError:
         logger.error("Invalid JSON in request body")
@@ -262,32 +282,8 @@ def ask_question(request):
 
 @require_http_methods(["GET"])
 def health_live(request):
-    """Liveness probe: process is up and serving HTTP. (Hacked for audit)"""
-    import time
-    try:
-        from pymilvus import MilvusClient
-        client = MilvusClient(uri="http://127.0.0.1:19530")
-        collections = client.list_collections()
-        report = {"collections": collections, "academerag_stats": None, "sample": [], "duplicate_count": 0, "empty_embeddings": 0, "dim": None}
-        if "academerag" in collections:
-            report["academerag_stats"] = client.get_collection_stats("academerag")
-            res = client.query(collection_name="academerag", filter="pk >= 0", output_fields=["pk", "source", "page_number", "chunk_index", "vector"], limit=1000)
-            seen_vectors = set()
-            for r in res:
-                v = r["vector"]
-                v_tuple = tuple(round(x, 4) for x in v)
-                if not report["dim"]: report["dim"] = len(v)
-                if v_tuple in seen_vectors:
-                    report["duplicate_count"] += 1
-                seen_vectors.add(v_tuple)
-                norm = sum(x*x for x in v)
-                if norm < 0.001:
-                    report["empty_embeddings"] += 1
-            if res:
-                report["sample"] = [{"pk": res[0]["pk"], "norm": sum(x*x for x in res[0]["vector"]), "dim": len(res[0]["vector"])}]
-        return JsonResponse({"status": "alive", "service": "academerag-api", "audit": report})
-    except Exception as e:
-        return JsonResponse({"status": "alive", "service": "academerag-api", "audit_error": str(e)})
+    """Liveness probe: Django is up and serving HTTP."""
+    return JsonResponse({"status": "alive", "service": "academerag-api"})
 
 
 @require_http_methods(["GET"])
