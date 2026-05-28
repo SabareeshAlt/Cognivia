@@ -78,10 +78,9 @@ CORE INSTRUCTIONS
 - If the answer is not explicitly present or inferable from the context, respond EXACTLY with:
   "Not found in the provided documents."
 
-2. Grounded Citations
-- Every answer must cite its sources.
-- At the end of relevant sentences or paragraphs, append: [Source: filename.pdf, Page X]
-- Base this citation strictly on the provided context metadata.
+2. No Citations or Metadata in Response
+- Do NOT include any citations, source markers, file names, page numbers, or section headers (such as "[Source: ...]") in your final response.
+- Only the main answer itself should be outputted cleanly, without any source tags.
 
 3. Hallucination Prevention
 - Do NOT hallucinate or fabricate information.
@@ -105,7 +104,7 @@ CORE INSTRUCTIONS
     return prompt
 
 def _ollama_reachable(timeout_seconds: float = 1.0) -> bool:
-    health_url = "http://ollama:11434"
+    health_url = OLLAMA_BASE_URL
     try:
         with urlopen(health_url, timeout=timeout_seconds) as response:  # nosec B310
             return 200 <= response.status < 500
@@ -116,7 +115,7 @@ def _create_llm_client(provider: str):
     if provider != "ollama":
         raise RuntimeError(f"Unsupported LLM provider: {provider}")
     # Configure Ollama with keep_alive to reduce cold starts
-    return ChatOllama(model=LLM_MODEL, base_url="http://ollama:11434", temperature=LLM_TEMPERATURE, keep_alive="-1")
+    return ChatOllama(model=LLM_MODEL, base_url=OLLAMA_BASE_URL, temperature=LLM_TEMPERATURE, keep_alive=-1)
 
 def _preferred_llm_providers() -> list[str]:
     providers = ["ollama"]
@@ -214,6 +213,58 @@ def _get_cached_query(question: str):
 def _set_cached_query(question: str, response: str):
     cache.set(f"llm_query:{question}", response, timeout=QUERY_CACHE_TTL)
 
+def clean_citations(text: str) -> str:
+    import re
+    # Remove bracketed source markers like [Source: ...] or any variant
+    text = re.sub(r'\[Source:\s*[^\]]*\]', '', text, flags=re.IGNORECASE)
+    # Remove lines starting with Source: or [Source:
+    text = re.sub(r'(?i)^\s*source:\s*.*$', '', text, flags=re.MULTILINE)
+    # Clean up double newlines or leading/trailing whitespace
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+def stream_clean_citations_filter(generator):
+    buffer = ""
+    in_bracket = False
+    
+    for chunk in generator:
+        if not chunk:
+            continue
+        
+        for char in chunk:
+            if char == '[':
+                if buffer:
+                    yield buffer
+                    buffer = ""
+                in_bracket = True
+                buffer += char
+            elif char == ']':
+                if in_bracket:
+                    buffer += char
+                    lower_buf = buffer.lower()
+                    if lower_buf.startswith("[source:") or "source:" in lower_buf:
+                        # Discard it!
+                        buffer = ""
+                    else:
+                        yield buffer
+                        buffer = ""
+                    in_bracket = False
+                else:
+                    yield char
+            else:
+                if in_bracket:
+                    buffer += char
+                    lower_buf = buffer.lower()
+                    prefix = "[source:"
+                    if len(buffer) > 150 or not prefix.startswith(lower_buf[:len(prefix)]):
+                        yield buffer
+                        buffer = ""
+                        in_bracket = False
+                else:
+                    yield char
+    if buffer:
+        yield buffer
+
 def get_optimized_response(question: str) -> str:
     cached = _get_cached_query(question)
     if cached:
@@ -227,8 +278,9 @@ def get_optimized_response(question: str) -> str:
 
     context = _format_context(docs)
     response = _invoke_with_provider_failover(context=context, question=question)
-    _set_cached_query(question, response)
-    return response
+    cleaned_response = clean_citations(response)
+    _set_cached_query(question, cleaned_response)
+    return cleaned_response
 
 def stream_optimized_response(question: str):
     start_time = time.perf_counter()
@@ -249,19 +301,23 @@ def stream_optimized_response(question: str):
         logger.info("LLM_GENERATION_STARTED | request_id=- | query='%s'", question)
         first_token_emitted = False
         
-        for chunk in _stream_with_provider_failover(context=context, question=question):
+        raw_stream = _stream_with_provider_failover(context=context, question=question)
+        for chunk in stream_clean_citations_filter(raw_stream):
             if not first_token_emitted:
-                latency_ms = (time.perf_counter() - start_time) * 1000
+                first_token_time = time.perf_counter()
+                latency_ms = (first_token_time - start_time) * 1000
                 logger.info("FIRST_TOKEN_STREAMED | request_id=- | latency_ms=%.1f", latency_ms)
+                logger.info("LLM_STATS | stream_start_latency_ms=%.1f", latency_ms)
                 first_token_emitted = True
             yield f'data: {json.dumps({"type": "token", "content": chunk})}\n\n'
             
         yield f'data: {json.dumps({"type": "done", "content": ""})}\n\n'
-        latency_ms = (time.perf_counter() - start_time) * 1000
-        logger.info("STREAM_COMPLETED | request_id=- | total_generation_ms=%.1f", latency_ms)
+        total_time = (time.perf_counter() - start_time) * 1000
+        logger.info("STREAM_COMPLETED | request_id=- | total_generation_ms=%.1f", total_time)
+        logger.info("LLM_STATS | generation_latency_ms=%.1f | ollama_failure_count=%d", total_time, 0)
         
     except Exception as exc:
-        latency_ms = (time.perf_counter() - start_time) * 1000
-        logger.error("STREAM_ABORTED | request_id=- | error='%s' | latency_ms=%.1f", exc, latency_ms, exc_info=True)
-        yield f'data: {json.dumps({"type": "error", "content": "An unexpected failure occurred during processing. Please try again."})}\n\n'
-        yield f'data: {json.dumps({"type": "done", "content": ""})}\n\n'
+        total_time = (time.perf_counter() - start_time) * 1000
+        logger.error("STREAM_ABORTED | request_id=- | error='%s' | latency_ms=%.1f", exc, total_time, exc_info=True)
+        logger.info("LLM_STATS | generation_latency_ms=%.1f | ollama_failure_count=%d", total_time, 1)
+        raise exc

@@ -61,7 +61,7 @@ function normalizeAssistantListItem(input: string): string {
   let text = input.trim();
   text = stripNumericNoise(text);
   // Remove semester prefixes when user asks for subject names only.
-  text = text.replace(/^(?:semester|sem)\s*(?:no\.?|number)?\s*(?:\d+|[ivxlcdm]+)\s*[:\-]\s*/i, "");
+  text = text.replace(/^(?:semester|sem)\s*(?:no\.?|number)?\s*(?:\d+|[ivxlcdm]+)\s*[:-]\s*/i, "");
   text = stripSubjectCodes(text);
   text = stripNumericNoise(text);
   return text;
@@ -69,7 +69,7 @@ function normalizeAssistantListItem(input: string): string {
 
 function normalizeAssistantParagraph(input: string): string {
   let text = input.trim();
-  text = text.replace(/^(?:semester|sem)\s*(?:no\.?|number)?\s*(?:\d+|[ivxlcdm]+)\s*[:\-]\s*/i, "");
+  text = text.replace(/^(?:semester|sem)\s*(?:no\.?|number)?\s*(?:\d+|[ivxlcdm]+)\s*[:-]\s*/i, "");
   text = stripSubjectCodes(text);
   text = stripNumericNoise(text);
   return text;
@@ -317,12 +317,51 @@ const ChatPage = () => {
       streamReaderRef.current = reader;
       const decoder = new TextDecoder();
       let botText = "";
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        botText += decoder.decode(value, { stream: true });
-        updateMessage(activeChatId, botMsgId, sanitizeText(botText));
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          if (trimmed.startsWith("data:")) {
+            const dataStr = trimmed.slice(5).trim();
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.type === "token") {
+                botText += parsed.content;
+                updateMessage(activeChatId, botMsgId, sanitizeText(botText));
+              } else if (parsed.type === "error") {
+                throw new ApiError(parsed.content || "An unexpected error occurred.", 500, "STREAM_ERROR");
+              }
+            } catch (e) {
+              if (e instanceof ApiError) throw e;
+            }
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        const line = buffer.trim();
+        if (line.startsWith("data:")) {
+          const dataStr = line.slice(5).trim();
+          try {
+            const parsed = JSON.parse(dataStr);
+            if (parsed.type === "token") {
+              botText += parsed.content;
+              updateMessage(activeChatId, botMsgId, sanitizeText(botText));
+            } else if (parsed.type === "error") {
+              throw new ApiError(parsed.content || "An unexpected error occurred.", 500, "STREAM_ERROR");
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
       }
 
       if (streamTokenRef.current !== streamToken) {

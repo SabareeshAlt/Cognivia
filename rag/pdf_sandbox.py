@@ -1,6 +1,17 @@
 import multiprocessing
 import traceback
-import magic
+try:
+    import magic
+except ImportError:
+    import sys
+    from types import ModuleType
+    dummy_magic = ModuleType("magic")
+    def from_file(filename, mime=False):
+        import mimetypes
+        return mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    dummy_magic.from_file = from_file
+    sys.modules["magic"] = dummy_magic
+    import magic
 from pypdf import PdfReader
 import logging
 

@@ -780,7 +780,7 @@ def _wait_for_collection_absence(client: MilvusClient, collection_name: str, tim
 
 
 def _milvus_cloud_ready() -> bool:
-    return _get_milvus_config() is not None
+    return _get_cloud_config() is not None
 
 
 def _build_fallback_stats_from_docs(docs: tuple[Document, ...]) -> dict[str, Any]:
@@ -1171,23 +1171,43 @@ def _retrieve_docs(question: str) -> list:
     dense_docs = []
     bm25_docs = []
     
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    dense_failed = False
+    dense_timeout = False
+    
+    executor = ThreadPoolExecutor(max_workers=2)
+    try:
         dense_future = executor.submit(_dense_search_pipeline, question_processed, search_k, target_sources)
         bm25_future = executor.submit(_search_bm25_fallback, question_processed, search_k, target_sources)
         
         try:
             dense_docs = dense_future.result(timeout=15.0)
+        except concurrent.futures.TimeoutError:
+            dense_failed = True
+            dense_timeout = True
+            logger.error("Dense search pipeline timed out (15s)")
         except Exception as e:
+            dense_failed = True
             logger.error("Dense search pipeline failed: %s", e)
             
         try:
             bm25_docs = bm25_future.result(timeout=15.0)
         except Exception as e:
             logger.error("BM25 search pipeline failed: %s", e)
+    finally:
+        try:
+            executor.shutdown(wait=False, cancel_futures=True)
+        except TypeError:
+            executor.shutdown(wait=False)
             
     concurrent_latency_ms = (time.perf_counter() - start_time) * 1000
     logger.info("CONCURRENT_SEARCH_COMPLETED | latency_ms=%.1f | dense_count=%d | bm25_count=%d", 
                 concurrent_latency_ms, len(dense_docs), len(bm25_docs))
+
+    # Detailed retrieval stats logging
+    total_retrieval_latency_ms = concurrent_latency_ms
+    fallback_triggered = len(dense_docs) == 0 or dense_failed
+    logger.info("RETRIEVAL_STATS | total_retrieval_latency_ms=%.1f | timeout_triggered=%s | fallback_triggered=%s",
+                total_retrieval_latency_ms, dense_timeout, fallback_triggered)
 
     # Fusion and deduplication
     fused_docs = _rrf_fuse(dense_docs, bm25_docs, search_k)
@@ -1482,14 +1502,29 @@ _cloud_circuit_breaker = {
     "consecutive_failures": 0,
     "bypass_until": 0.0,
 }
-CLOUD_FAILURE_THRESHOLD = 3
+CLOUD_FAILURE_THRESHOLD = 1
 CLOUD_COOLDOWN_SECONDS = 60.0
 
+def _get_deployment_mode() -> str:
+    mode = os.getenv("ACADEMERAG_MILVUS_DEPLOYMENT")
+    if mode:
+        return mode.strip().lower()
+    if _env_bool("ACADEMERAG_ENABLE_MILVUS_CLOUD", default=False):
+        return "cloud"
+    return "local"
+
 def _get_cloud_config() -> dict | None:
+    if _get_deployment_mode() == "cloud":
+        return _get_milvus_config()
     return None
 
 def _get_local_config() -> dict:
-    return _get_milvus_config()
+    return {
+        "uri": os.path.join(PROJECT_ROOT, "milvus_local.db"),
+        "token": "",
+        "collection": COLLECTION_NAME,
+        "model": EMBEDDING_MODEL,
+    }
 
 def _search_milvus_with_config(cfg: dict, question: str, k: int, target_sources: set[str] | None, timeout_sec: float) -> list[Document]:
     if not cfg:
@@ -1505,10 +1540,17 @@ def _search_milvus_with_config(cfg: dict, question: str, k: int, target_sources:
         "search_params": {"metric_type": "COSINE", "params": {}},
         "limit": k,
         "output_fields": ["text", "source", "document_path", "document_hash", "page_number", "chunk_index"],
+        "timeout": timeout_sec,
     }
     if source_expr:
         search_kwargs["filter"] = source_expr
-    rows = client.search(**search_kwargs)
+    try:
+        rows = client.search(**search_kwargs)
+    except Exception as e:
+        if "does not exist" in str(e) or "collection" in str(e).lower():
+            logger.warning("Milvus collection '%s' does not exist; returning empty list. Error: %s", cfg["collection"], e)
+            return []
+        raise e
     hits = rows[0] if rows else []
     docs = []
     for hit in hits:
@@ -1535,48 +1577,50 @@ def _search_cloud_milvus(question: str, k: int, target_sources: set[str] | None)
     global _cloud_circuit_breaker
     if time.monotonic() < _cloud_circuit_breaker["bypass_until"]:
         logger.info("CLOUD_SEARCH_FAILED | request_id=- | query='%s' | latency_ms=0.0 | reason='Circuit breaker open'", question)
+        logger.info("CIRCUIT_BREAKER_STATE | status='open' | bypass_until=%f", _cloud_circuit_breaker["bypass_until"])
         return []
+    else:
+        logger.info("CIRCUIT_BREAKER_STATE | status='closed'")
 
-    timeout_sec = 5.0
-    max_retries = 1
+    timeout_sec = 1.5
     
-    for attempt in range(max_retries + 1):
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(
+            _search_milvus_with_config, 
+            cfg, question, k, target_sources, timeout_sec
+        )
+        docs = future.result(timeout=timeout_sec + 1.0)
+        
+        latency_ms = (time.perf_counter() - start_time) * 1000
+        logger.info("CLOUD_SEARCH_COMPLETED | request_id=- | query='%s' | latency_ms=%.1f | chunk_count=%d", 
+                    question, latency_ms, len(docs))
+        _cloud_circuit_breaker["consecutive_failures"] = 0
+        return docs
+        
+    except concurrent.futures.TimeoutError:
+        latency_ms = (time.perf_counter() - start_time) * 1000
+        logger.warning("CLOUD_SEARCH_TIMEOUT | request_id=- | query='%s' | latency_ms=%.1f", 
+                       question, latency_ms)
+        _cloud_circuit_breaker["consecutive_failures"] += 1
+        if _cloud_circuit_breaker["consecutive_failures"] >= CLOUD_FAILURE_THRESHOLD:
+            _cloud_circuit_breaker["bypass_until"] = time.monotonic() + CLOUD_COOLDOWN_SECONDS
+            logger.warning("Cloud Milvus circuit breaker OPENED for %.1fs | reason='timeout'", CLOUD_COOLDOWN_SECONDS)
+        return []
+    except Exception as exc:
+        latency_ms = (time.perf_counter() - start_time) * 1000
+        logger.warning("CLOUD_SEARCH_FAILED | request_id=- | query='%s' | latency_ms=%.1f | error='%s'", 
+                       question, latency_ms, exc)
+        _cloud_circuit_breaker["consecutive_failures"] += 1
+        if _cloud_circuit_breaker["consecutive_failures"] >= CLOUD_FAILURE_THRESHOLD:
+            _cloud_circuit_breaker["bypass_until"] = time.monotonic() + CLOUD_COOLDOWN_SECONDS
+            logger.warning("Cloud Milvus circuit breaker OPENED for %.1fs | reason='failure'", CLOUD_COOLDOWN_SECONDS)
+        return []
+    finally:
         try:
-            # Enforce strict Python-level timeout to ensure parallel BM25 execution is never blocked 
-            # by a hung Milvus network call.
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(
-                    _search_milvus_with_config, 
-                    cfg, question, k, target_sources, timeout_sec
-                )
-                # Give slightly more time than the Milvus timeout to allow clean internal timeout first
-                docs = future.result(timeout=timeout_sec + 1.0) 
-                
-            latency_ms = (time.perf_counter() - start_time) * 1000
-            logger.info("CLOUD_SEARCH_COMPLETED | request_id=- | query='%s' | latency_ms=%.1f | chunk_count=%d | attempt=%d", 
-                        question, latency_ms, len(docs), attempt + 1)
-            _cloud_circuit_breaker["consecutive_failures"] = 0
-            return docs
-            
-        except concurrent.futures.TimeoutError:
-            latency_ms = (time.perf_counter() - start_time) * 1000
-            logger.warning("CLOUD_SEARCH_TIMEOUT | request_id=- | query='%s' | latency_ms=%.1f | attempt=%d", 
-                           question, latency_ms, attempt + 1)
-        except Exception as exc:
-            latency_ms = (time.perf_counter() - start_time) * 1000
-            logger.warning("CLOUD_SEARCH_FAILED | request_id=- | query='%s' | latency_ms=%.1f | attempt=%d | error='%s'", 
-                           question, latency_ms, attempt + 1, exc)
-            
-        if attempt == max_retries:
-            _cloud_circuit_breaker["consecutive_failures"] += 1
-            if _cloud_circuit_breaker["consecutive_failures"] >= CLOUD_FAILURE_THRESHOLD:
-                _cloud_circuit_breaker["bypass_until"] = time.monotonic() + CLOUD_COOLDOWN_SECONDS
-                logger.warning("Cloud Milvus circuit breaker OPENED for %.1fs", CLOUD_COOLDOWN_SECONDS)
-            return []
-            
-        time.sleep(0.5)
-
-    return []
+            executor.shutdown(wait=False, cancel_futures=True)
+        except TypeError:
+            executor.shutdown(wait=False)
 
 def _search_local_milvus(question: str, k: int, target_sources: set[str] | None) -> list[Document]:
     logger.info("LOCAL_SEARCH_STARTED | request_id=- | query='%s'", question)
@@ -1584,35 +1628,35 @@ def _search_local_milvus(question: str, k: int, target_sources: set[str] | None)
     
     cfg = _get_local_config()
     timeout_sec = 3.0
-    max_retries = 1
     
-    for attempt in range(max_retries + 1):
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(
+            _search_milvus_with_config, 
+            cfg, question, k, target_sources, timeout_sec
+        )
+        docs = future.result(timeout=timeout_sec + 1.0)
+        
+        latency_ms = (time.perf_counter() - start_time) * 1000
+        logger.info("LOCAL_SEARCH_COMPLETED | request_id=- | query='%s' | latency_ms=%.1f | chunk_count=%d", 
+                    question, latency_ms, len(docs))
+        return docs
+        
+    except concurrent.futures.TimeoutError:
+        latency_ms = (time.perf_counter() - start_time) * 1000
+        logger.warning("LOCAL_SEARCH_TIMEOUT | request_id=- | query='%s' | latency_ms=%.1f", 
+                       question, latency_ms)
+        return []
+    except Exception as exc:
+        latency_ms = (time.perf_counter() - start_time) * 1000
+        logger.warning("LOCAL_SEARCH_FAILED | request_id=- | query='%s' | latency_ms=%.1f | error='%s'", 
+                       question, latency_ms, exc)
+        return []
+    finally:
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(
-                    _search_milvus_with_config, 
-                    cfg, question, k, target_sources, timeout_sec
-                )
-                docs = future.result(timeout=timeout_sec + 1.0)
-                
-            latency_ms = (time.perf_counter() - start_time) * 1000
-            logger.info("LOCAL_SEARCH_COMPLETED | request_id=- | query='%s' | latency_ms=%.1f | chunk_count=%d | attempt=%d", 
-                        question, latency_ms, len(docs), attempt + 1)
-            return docs
-            
-        except concurrent.futures.TimeoutError:
-            latency_ms = (time.perf_counter() - start_time) * 1000
-            logger.warning("LOCAL_SEARCH_TIMEOUT | request_id=- | query='%s' | latency_ms=%.1f | attempt=%d", 
-                           question, latency_ms, attempt + 1)
-        except Exception as exc:
-            latency_ms = (time.perf_counter() - start_time) * 1000
-            logger.warning("LOCAL_SEARCH_FAILED | request_id=- | query='%s' | latency_ms=%.1f | attempt=%d | error='%s'", 
-                           question, latency_ms, attempt + 1, exc)
-                           
-        if attempt == max_retries:
-            return []
-            
-        time.sleep(0.2)
+            executor.shutdown(wait=False, cancel_futures=True)
+        except TypeError:
+            executor.shutdown(wait=False)
 
     return []
 
