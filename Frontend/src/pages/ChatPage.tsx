@@ -30,7 +30,7 @@ function renderInlineMarkdown(input: string): string {
   
   // Parse [Source: filename, Page: number] or [Source: filename] into visual citation chips
   text = text.replace(
-    /\[Source:\s*([^,\]]+)(?:,\s*Page:\s*(\d+))?\]/gi,
+    /\[Source:\s*([^,\]]+)(?:,\s*Page:?\s*(\d+))?\]/gi,
     (_, file, page) => {
       const pageStr = page ? ` (p. ${page})` : "";
       const titleStr = page ? `Source: ${file}, Page ${page}` : `Source: ${file}`;
@@ -42,10 +42,31 @@ function renderInlineMarkdown(input: string): string {
 }
 
 function cleanAssistantDisplayText(input: string): string {
-  return input
-    .replace(/\s*\(\s*[-–—\s]+,\s*credits?\s*\)/gi, "")
-    .replace(/\s*\[Source:\s*[^,\]]+,\s*Page:\s*\]/gi, "")
-    .replace(/\s*\[Source:\s*RAG sample\s*\.pdf(?:,\s*Page:\s*)?\]/gi, "")
+  let text = input;
+  
+  // Remove credits noise
+  text = text.replace(/\s*\(\s*[-–—\s]+,\s*credits?\s*\)/gi, "");
+  
+  // Remove empty/broken/placeholder citations
+  text = text.replace(
+    /\[Source:\s*([^,\]]+)(?:,\s*Page:?\s*([^\]]*))?\]/gi,
+    (match, file, page) => {
+      const trimmedFile = file.trim();
+      const trimmedPage = page ? page.trim() : "";
+      
+      const isPlaceholderFile = /^RAG sample\s*\.pdf$/i.test(trimmedFile) || trimmedFile === "";
+      const isPlaceholderPage = trimmedPage === "" || !/^\d+$/.test(trimmedPage);
+      
+      // If the file is placeholder OR the page is empty/non-numeric when Page is specified, remove it!
+      if (isPlaceholderFile || (page !== undefined && isPlaceholderPage)) {
+        return "";
+      }
+      
+      return match;
+    }
+  );
+  
+  return text
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -70,31 +91,48 @@ function isLikelyCourseCatalogLine(input: string): boolean {
 
 function stripNumericNoise(input: string): string {
   let text = input.trim();
-  // Remove repeated list/index prefixes like "1 1 ...", "1 21 ...", "2) 2) ..."
-  text = text.replace(/^(?:(?:\d+|[ivxlcdm]+)\s*[.):-]?\s+){1,4}/i, "");
+  // Remove repeated list/index prefixes like "1 1 ...", "1 21 ...", "2) 2) ...", including optional bold markers
+  text = text.replace(/^(?:(?:\*\*|__)?(?:\d+|[ivxlcdm]+)(?:\*\*|__)?\s*[.):-]?\s*(?:\*\*|__)?\s+){1,4}/i, "");
   if (isLikelyCourseCatalogLine(text)) {
     text = text.replace(/\b\d{1,3}\b/g, " ");
   }
   return text.replace(/\s{2,}/g, " ").trim();
 }
 
+function protectCitations(input: string, fn: (cleanedText: string) => string): string {
+  const citations: string[] = [];
+  const placeholderText = input.replace(/\[Source:\s*[^\]]+\]/gi, (match) => {
+    citations.push(match);
+    return `__CITATION_PLACEHOLDER_${citations.length - 1}__`;
+  });
+  
+  const processed = fn(placeholderText);
+  
+  return processed.replace(/__CITATION_PLACEHOLDER_(\d+)__/g, (_, idx) => citations[Number(idx)]);
+}
+
 function normalizeAssistantListItem(input: string): string {
-  let text = input.trim();
-  text = stripNumericNoise(text);
-  // Remove semester prefixes when user asks for subject names only.
-  text = text.replace(/^(?:semester|sem)\s*(?:no\.?|number)?\s*(?:\d+|[ivxlcdm]+)\s*[:-]\s*/i, "");
-  text = stripSubjectCodes(text);
-  text = stripNumericNoise(text);
-  return text;
+  return protectCitations(input, (text) => {
+    text = text.trim();
+    text = stripNumericNoise(text);
+    // Remove semester prefixes when user asks for subject names only.
+    text = text.replace(/^(?:semester|sem)\s*(?:no\.?|number)?\s*(?:\d+|[ivxlcdm]+)\s*[:-]\s*/i, "");
+    text = stripSubjectCodes(text);
+    text = stripNumericNoise(text);
+    return text;
+  });
 }
 
 function normalizeAssistantParagraph(input: string): string {
-  let text = input.trim();
-  text = text.replace(/^(?:semester|sem)\s*(?:no\.?|number)?\s*(?:\d+|[ivxlcdm]+)\s*[:-]\s*/i, "");
-  text = stripSubjectCodes(text);
-  text = stripNumericNoise(text);
-  return text;
+  return protectCitations(input, (text) => {
+    text = text.trim();
+    text = text.replace(/^(?:semester|sem)\s*(?:no\.?|number)?\s*(?:\d+|[ivxlcdm]+)\s*[:-]\s*/i, "");
+    text = stripSubjectCodes(text);
+    text = stripNumericNoise(text);
+    return text;
+  });
 }
+
 
 export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): string {
   const normalizedInput = cleanAcademicNoise ? cleanAssistantDisplayText(input) : input;
@@ -200,7 +238,7 @@ export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): s
 
 function extractValidCitations(input: string): Array<{ file: string; page?: string }> {
   const citations: Array<{ file: string; page?: string }> = [];
-  const matches = cleanAssistantDisplayText(input).matchAll(/\[Source:\s*([^,\]]+)(?:,\s*Page:\s*(\d+))?\]/gi);
+  const matches = cleanAssistantDisplayText(input).matchAll(/\[Source:\s*([^,\]]+)(?:,\s*Page:?\s*(\d+))?\]/gi);
 
   for (const match of matches) {
     const file = match[1].trim();

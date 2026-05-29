@@ -33,10 +33,20 @@ from dotenv import load_dotenv
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
+from pymilvus import CollectionSchema, DataType, FieldSchema, MilvusClient, connections
+
+# Monkeypatch MilvusClient to automatically register its connections in ORM connections registry
+# to maintain compatibility with ORM-style Collection wrapper used by langchain-milvus.
+_original_milvus_client_init = MilvusClient.__init__
+def _patched_milvus_client_init(self, *args, **kwargs):
+    _original_milvus_client_init(self, *args, **kwargs)
+    connections._alias_handlers[self._using] = self._handler
+    connections._alias_config[self._using] = {"db_name": kwargs.get("db_name", "")}
+MilvusClient.__init__ = _patched_milvus_client_init
+
 from langchain_milvus import Milvus
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pymilvus import CollectionSchema, DataType, FieldSchema, MilvusClient, connections
 from pypdf import PdfReader
 from rag.pdf_sandbox import extract_pdf_text_sandboxed
 
@@ -1584,6 +1594,11 @@ def _search_milvus_with_config(cfg: dict, query_vector: list[float], k: int, tar
         return []
     source_expr = _milvus_source_filter_expr(target_sources or set())
     client = _connect_milvus_client_with_timeout(cfg, timeout_seconds=timeout_sec)
+    try:
+        if client.has_collection(cfg["collection"]):
+            client.load_collection(cfg["collection"])
+    except Exception as load_exc:
+        logger.warning("Failed to load Milvus collection '%s': %s", cfg["collection"], load_exc)
     search_kwargs = {
         "collection_name": cfg["collection"],
         "data": [query_vector],

@@ -11,6 +11,9 @@ describe("ChatPage markdown cleanup", () => {
       "4. 1 21 Professional Ethics",
       "5. 10 30 Advanced Computer Architecture",
       "6. 191LEH201T Technical English I",
+      "7. **7.** Basic Civil and Mechanical Engineering",
+      "8. **8.** Basic Electrical Engineering",
+      "9. **9.** Problem Solving through Python Programming",
     ].join("\n");
 
     const html = markdownToSafeHtml(raw, true);
@@ -20,16 +23,22 @@ describe("ChatPage markdown cleanup", () => {
     expect(html).toContain("Professional Communication - English / Japanese / French II");
     expect(html).toContain("Professional Ethics");
     expect(html).toContain("Advanced Computer Architecture");
+    expect(html).toContain("Basic Civil and Mechanical Engineering");
+    expect(html).toContain("Basic Electrical Engineering");
+    expect(html).toContain("Problem Solving through Python Programming");
     expect(html).not.toMatch(/\b191LEH201T\b/);
     expect(html).not.toMatch(/>\s*1\s+1\s+/);
     expect(html).not.toMatch(/>\s*2\s+2\s+/);
+    expect(html).not.toContain("<strong>7.</strong>");
+    expect(html).not.toContain("<strong>8.</strong>");
+    expect(html).not.toContain("<strong>9.</strong>");
   });
 
   it("removes empty citation and credit placeholders from assistant output", () => {
     const raw = [
       "Semester IV:",
       "* Probability and Number Theory ( - - - , credits) [Source: RAG sample .pdf, Page: ]",
-      "* Database Management Systems ( - - - , credits) [Source: RAG sample .pdf, Page: ]",
+      "* Database Management Systems ( - - - , credits) [Source: RAG sample .pdf, Page ]",
     ].join("\n");
 
     const html = markdownToSafeHtml(raw, true);
@@ -41,4 +50,14 @@ describe("ChatPage markdown cleanup", () => {
     expect(html).not.toContain("Page:");
     expect(html).not.toContain("- - -");
   });
+
+  it("handles valid citations with optional colons", () => {
+    const raw = "See detail [Source: RAG sample 1.pdf, Page 12] and [Source: RAG sample 2.pdf, Page: 34]";
+    const html = markdownToSafeHtml(raw, true);
+    expect(html).toContain("p. 12");
+    expect(html).toContain("p. 34");
+    expect(html).toContain("RAG sample 1.pdf");
+    expect(html).toContain("RAG sample 2.pdf");
+  });
 });
+

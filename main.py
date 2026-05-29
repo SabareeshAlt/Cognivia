@@ -411,7 +411,7 @@ def main():
 
     if not args.no_health_wait:
         if not args.frontend_only:
-            backend_url = f'http://{args.backend_host}:{backend_port}/api/health/'
+            backend_url = f'http://{args.backend_host}:{backend_port}/api/health/live/'
             ok = wait_for_http(backend_url)
             if ok:
                 print_check("Backend Running")

@@ -420,8 +420,24 @@ def _set_cached_query(question: str, response: str) -> None:
 def clean_citations(text: str) -> str:
     """Normalize whitespace and excess newlines, preserving citation markers."""
     import re
+    
+    def replacer(m):
+        file = m.group(1).strip()
+        page = m.group(2).strip() if m.group(2) else None
+        is_placeholder_file = bool(re.match(r'^RAG sample\s*\.pdf$', file, re.I)) or file == ""
+        if is_placeholder_file:
+            return ""
+        if "Page" in m.group(0) or page is not None:
+            if not page or not re.match(r'^\d+$', page):
+                return ""
+        return m.group(0)
+
+    pat = r'\[Source:\s*([^,\]]+)(?:,\s*Page:?\s*([^\]]*))?\]'
+    text = re.sub(pat, replacer, text, flags=re.I)
+    text = re.sub(r'[ \t]{2,}', ' ', text)
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
+
 
 
 def stream_clean_citations_filter(generator):

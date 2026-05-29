@@ -291,3 +291,26 @@ class DependencyFailureTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["error"], "Failed to process the question due to an internal dependency error.")
         self.assertNotIn("Sensitive internal stack details", payload["error"])
+
+
+class CitationCleaningTests(TestCase):
+    def test_clean_citations_removes_placeholders(self):
+        from rag.llm_orchestration import clean_citations
+        
+        # Test 1: Placeholder files are removed
+        self.assertEqual(clean_citations("Hello [Source: RAG sample .pdf, Page ] world"), "Hello world")
+        self.assertEqual(clean_citations("Hello [Source: RAG sample .pdf, Page: ] world"), "Hello world")
+        self.assertEqual(clean_citations("Hello [Source: RAG sample .pdf] world"), "Hello world")
+        self.assertEqual(clean_citations("Hello [Source: RAG sample.pdf] world"), "Hello world")
+        self.assertEqual(clean_citations("Hello [Source: RAG sample   .pdf, Page 12] world"), "Hello world")
+        
+        # Test 2: Valid citations are kept
+        self.assertEqual(clean_citations("Hello [Source: RAG sample 1.pdf, Page 12] world"), "Hello [Source: RAG sample 1.pdf, Page 12] world")
+        self.assertEqual(clean_citations("Hello [Source: RAG sample 2.pdf] world"), "Hello [Source: RAG sample 2.pdf] world")
+        self.assertEqual(clean_citations("Hello [Source: course_info.pdf, Page: 45] world"), "Hello [Source: course_info.pdf, Page: 45] world")
+        
+        # Test 3: Malformed page numbers are removed
+        self.assertEqual(clean_citations("Hello [Source: course_info.pdf, Page ] world"), "Hello world")
+        self.assertEqual(clean_citations("Hello [Source: course_info.pdf, Page abc] world"), "Hello world")
+        self.assertEqual(clean_citations("Hello [Source: , Page 12] world"), "Hello world")
+

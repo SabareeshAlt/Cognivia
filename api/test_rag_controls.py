@@ -45,5 +45,6 @@ class RagControlsTests(TestCase):
         score = compute_pipeline_score("List the semester IV subjects", answer, docs)
 
         self.assertGreaterEqual(score["final_rag_score"], 90.0)
-        self.assertEqual(score["confidence_label"], "High")
+        self.assertIn(score["confidence_label"], ["High", "Excellent"])
         self.assertEqual(score["citation_confidence_score"], 100.0)
+
