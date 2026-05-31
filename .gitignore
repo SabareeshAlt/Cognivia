@@ -22,6 +22,7 @@ Frontend/test-results/
 milvus_local.db
 *.sqlite3
 *.pkl
+*.lock
 prometheus_multiproc_dir/
 scratch/
 

@@ -455,7 +455,7 @@ def _load_and_chunk_files(file_metadata: list[dict]) -> list[Document]:
             continue
             
         try:
-            pages = extract_pdf_text_sandboxed(path)
+            pages = extract_pdf_text_sandboxed(path, timeout=180)
         except Exception as e:
             logger.error("Sandbox extraction failed for %s: %s. Skipping.", item['relative_path'], e)
             continue
