@@ -19,10 +19,20 @@ Frontend/coverage/
 Frontend/playwright-report/
 Frontend/test-results/
 
+# Milvus / vector store runtime artifacts
 milvus_local.db
 *.sqlite3
 *.pkl
 *.lock
+
+# Prometheus metrics runtime
 prometheus_multiproc_dir/
+
+# Dev scratchpad
 scratch/
+
+# Compiled Python migrations bytecode
+api/migrations/__pycache__/
+rag_project/__pycache__/
+rag/__pycache__/
 
