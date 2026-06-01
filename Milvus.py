@@ -2066,13 +2066,22 @@ def _get_cross_encoder():
             if _cross_encoder_model is None:
                 logger.info("Initializing CrossEncoder model for reranking...")
                 try:
+                    # Force offline mode to prevent slow/hanging Hugging Face network requests
+                    os.environ["HF_HUB_OFFLINE"] = "1"
                     from sentence_transformers import CrossEncoder
-                    # Standard efficient cross-encoder model
-                    _cross_encoder_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
-                except ImportError:
-                    logger.error("sentence_transformers is not installed. CrossEncoder reranking will fail.")
-                    raise
+                    _cross_encoder_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", local_files_only=True)
+                except Exception as exc:
+                    logger.warning("Failed to initialize CrossEncoder in offline mode: %s. Retrying in online mode...", exc)
+                    try:
+                        # Fallback to online mode if local files not found (e.g. first run)
+                        os.environ.pop("HF_HUB_OFFLINE", None)
+                        from sentence_transformers import CrossEncoder
+                        _cross_encoder_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+                    except ImportError:
+                        logger.error("sentence_transformers is not installed. CrossEncoder reranking will fail.")
+                        raise
     return _cross_encoder_model
+
 
 def preload_cross_encoder():
     """Eagerly load the CrossEncoder model to avoid lazy-loading on first request."""

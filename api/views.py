@@ -288,7 +288,6 @@ def health_live(request):
 
 @require_http_methods(["GET"])
 @ratelimit(key="ip", rate="60/m", block=True)
-@jwt_required
 def health_ready(request):
     """Readiness probe with dependency checks."""
     started = time.monotonic()
@@ -337,7 +336,6 @@ def health_ready(request):
 
 @require_http_methods(["GET"])
 @ratelimit(key="ip", rate="60/m", block=True)
-@jwt_required
 def health_check(request):
     """Backward-compatible health alias mapped to readiness checks."""
     return health_ready(request)

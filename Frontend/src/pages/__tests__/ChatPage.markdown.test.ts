@@ -51,13 +51,14 @@ describe("ChatPage markdown cleanup", () => {
     expect(html).not.toContain("- - -");
   });
 
-  it("handles valid citations with optional colons", () => {
+  it("handles valid citations with optional colons by stripping them from the body html", () => {
     const raw = "See detail [Source: RAG sample 1.pdf, Page 12] and [Source: RAG sample 2.pdf, Page: 34]";
     const html = markdownToSafeHtml(raw, true);
-    expect(html).toContain("p. 12");
-    expect(html).toContain("p. 34");
-    expect(html).toContain("RAG sample 1.pdf");
-    expect(html).toContain("RAG sample 2.pdf");
+    expect(html).not.toContain("p. 12");
+    expect(html).not.toContain("p. 34");
+    expect(html).not.toContain("RAG sample 1.pdf");
+    expect(html).not.toContain("RAG sample 2.pdf");
+    expect(html).toContain("See detail and");
   });
 });
 

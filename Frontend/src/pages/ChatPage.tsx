@@ -21,24 +21,32 @@ function escapeHtml(input: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function renderInlineMarkdown(input: string): string {
+function renderInlineMarkdown(input: string, cleanCitations = false): string {
   let text = escapeHtml(input);
   text = text.replace(/`([^`]+)`/g, "<code>$1</code>");
   text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   text = text.replace(/\*([^*]+)\*/g, "<em>$1</em>");
   text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
   
-  // Parse [Source: filename, Page: number] or [Source: filename] into visual citation chips
-  text = text.replace(
-    /\[Source:\s*([^,\]]+)(?:,\s*Page:?\s*(\d+))?\]/gi,
-    (_, file, page) => {
-      const pageStr = page ? ` (p. ${page})` : "";
-      const titleStr = page ? `Source: ${file}, Page ${page}` : `Source: ${file}`;
-      return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 text-xs font-semibold rounded bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all select-none cursor-default" title="${titleStr}">📄 ${file}${pageStr}</span>`;
-    }
-  );
+  if (cleanCitations) {
+    // Remove [Source: filename, Page: number] or [Source: filename] entirely from the body
+    text = text.replace(/\[Source:\s*[^\]]+\]/gi, "");
+    // Clean up trailing spaces before punctuation and collapse multiple spaces
+    text = text.replace(/\s+/g, " ");
+    text = text.replace(/\s+([.,;!?])/g, "$1");
+  } else {
+    // Parse [Source: filename, Page: number] or [Source: filename] into visual citation chips
+    text = text.replace(
+      /\[Source:\s*([^,\]]+)(?:,\s*Page:?\s*(\d+))?\]/gi,
+      (_, file, page) => {
+        const pageStr = page ? ` (p. ${page})` : "";
+        const titleStr = page ? `Source: ${file}, Page ${page}` : `Source: ${file}`;
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 mx-0.5 text-xs font-semibold rounded bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all select-none cursor-default" title="${titleStr}">📄 ${file}${pageStr}</span>`;
+      }
+    );
+  }
   
-  return text;
+  return text.trim();
 }
 
 function cleanAssistantDisplayText(input: string): string {
@@ -174,17 +182,17 @@ export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): s
 
     if (line.startsWith("### ")) {
       closeListIfOpen();
-      chunks.push(`<h3>${renderInlineMarkdown(line.slice(4))}</h3>`);
+      chunks.push(`<h3>${renderInlineMarkdown(line.slice(4), cleanAcademicNoise)}</h3>`);
       continue;
     }
     if (line.startsWith("## ")) {
       closeListIfOpen();
-      chunks.push(`<h2>${renderInlineMarkdown(line.slice(3))}</h2>`);
+      chunks.push(`<h2>${renderInlineMarkdown(line.slice(3), cleanAcademicNoise)}</h2>`);
       continue;
     }
     if (line.startsWith("# ")) {
       closeListIfOpen();
-      chunks.push(`<h1>${renderInlineMarkdown(line.slice(2))}</h1>`);
+      chunks.push(`<h1>${renderInlineMarkdown(line.slice(2), cleanAcademicNoise)}</h1>`);
       continue;
     }
 
@@ -198,7 +206,7 @@ export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): s
         ? normalizeAssistantListItem(line.replace(/^\d+\.\s+/, ""))
         : line.replace(/^\d+\.\s+/, "").trim();
       if (itemText) {
-        chunks.push(`<li>${renderInlineMarkdown(itemText)}</li>`);
+        chunks.push(`<li>${renderInlineMarkdown(itemText, cleanAcademicNoise)}</li>`);
       }
       continue;
     }
@@ -213,7 +221,7 @@ export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): s
         ? normalizeAssistantListItem(line.replace(/^[-*]\s+/, ""))
         : line.replace(/^[-*]\s+/, "").trim();
       if (itemText) {
-        chunks.push(`<li>${renderInlineMarkdown(itemText)}</li>`);
+        chunks.push(`<li>${renderInlineMarkdown(itemText, cleanAcademicNoise)}</li>`);
       }
       continue;
     }
@@ -221,7 +229,7 @@ export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): s
     closeListIfOpen();
     const paragraphText = cleanAcademicNoise ? normalizeAssistantParagraph(line) : line.trim();
     if (paragraphText) {
-      chunks.push(`<p>${renderInlineMarkdown(paragraphText)}</p>`);
+      chunks.push(`<p>${renderInlineMarkdown(paragraphText, cleanAcademicNoise)}</p>`);
     }
   }
 
@@ -630,7 +638,7 @@ const ChatPage = () => {
                   }`}
                 >
                   <div
-                    className="markdown-content text-inherit [&_a]:underline [&_a]:decoration-current [&_a:hover]:opacity-80 [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/10 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_h1]:mb-3 [&_h1]:mt-1 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:mt-1 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:mt-1 [&_h3]:text-base [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:mb-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-6"
+                    className="markdown-content text-inherit [&_a]:underline [&_a]:decoration-current [&_a:hover]:opacity-80 [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/10 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_h1]:mb-3 [&_h1]:mt-1 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:mt-1 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:mt-1 [&_h3]:text-base [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:mb-3 [&_p]:mb-3 [&_p:last-child]:mb-0 [&_ul]:mb-3 [&_ul]:list-disc [&_ul]:pl-6"
                     dangerouslySetInnerHTML={{ __html: markdownToSafeHtml(msg.content, msg.role === "assistant") }}
                   />
                   {msg.role === "assistant" && (() => {
@@ -707,23 +715,23 @@ const ChatPage = () => {
                   onClick={() => {
                     stopStreaming().catch(() => undefined);
                   }}
-                  className="rounded-full bg-destructive p-4 text-destructive-foreground transition-all hover:opacity-90"
+                  className="rounded-full bg-destructive p-3 text-destructive-foreground transition-all hover:opacity-90"
                   aria-label="Stop streaming"
                   title="Stop streaming"
                 >
-                  <Square size={20} />
+                  <Square size={16} />
                 </button>
               )}
               <button
                 type="submit"
                 disabled={!input.trim() || !config.featureFlags.chatEnabled}
-                className={`rounded-full p-4 text-primary-foreground transition-all hover:scale-105 ${
+                className={`rounded-full p-3 text-primary-foreground transition-all hover:scale-105 ${
                   !input.trim() || !config.featureFlags.chatEnabled
                     ? "cursor-not-allowed bg-muted"
                     : "bg-gradient-to-r from-primary to-primary/80 shadow-lg"
                 }`}
               >
-                <Rocket size={24} />
+                <Rocket size={16} />
               </button>
             </form>
           </div>
