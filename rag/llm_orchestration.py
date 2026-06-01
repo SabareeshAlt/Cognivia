@@ -30,8 +30,8 @@ try:
 except ImportError:
     _GROQ_MODULE_AVAILABLE = False
 
-# Import retrieval functions from the core module
-from Milvus import (
+# Import retrieval functions from the database package
+from database import (
     _retrieve_docs,
     _augment_docs_for_syllabus,
     _format_context,

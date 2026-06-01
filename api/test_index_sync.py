@@ -1,6 +1,6 @@
 from django.test import SimpleTestCase
 
-from Milvus import compute_sync_decision
+from database import compute_sync_decision
 
 
 class IndexSyncDecisionTests(SimpleTestCase):

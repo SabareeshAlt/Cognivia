@@ -47,13 +47,13 @@ def _load_rag_modules():
     """Lazy-load RAG modules so Django startup doesn't crash."""
     global _rag_modules_loaded, _stream_fn, _response_fn, _vector_store_fn, _diagnostics_fn, _rag_module_mtime
 
-    milvus_path = os.path.join(parent_dir, "Milvus.py")
+    milvus_path = os.path.join(parent_dir, "database", "__init__.py")
     current_mtime = os.path.getmtime(milvus_path) if os.path.exists(milvus_path) else None
     if _rag_modules_loaded and _rag_module_mtime == current_mtime:
         return
 
     try:
-        milvus_module = importlib.import_module("Milvus")
+        milvus_module = importlib.import_module("database")
         llm_module = importlib.import_module("rag.llm_orchestration")
         if _rag_modules_loaded:
             milvus_module = importlib.reload(milvus_module)
@@ -148,7 +148,10 @@ def _refresh_vector_dependencies_async(min_interval_seconds: float = 10.0):
         if (time.monotonic() - _vector_ready_cache["last_check"]) < min_interval_seconds:
             return
         _vector_ready_cache["inflight"] = True
-    threading.Thread(target=_probe_vector_dependencies, daemon=True).start()
+    if "test" in sys.argv:
+        _probe_vector_dependencies()
+    else:
+        threading.Thread(target=_probe_vector_dependencies, daemon=True).start()
 
 
 import re
@@ -287,6 +290,7 @@ def health_live(request):
 
 
 @require_http_methods(["GET"])
+@jwt_required
 @ratelimit(key="ip", rate="60/m", block=True)
 def health_ready(request):
     """Readiness probe with dependency checks."""
@@ -317,11 +321,13 @@ def health_ready(request):
 
     elapsed = time.monotonic() - started
     if elapsed <= timeout_s:
-        _refresh_vector_dependencies_async(min_interval_seconds=5.0)
+        _refresh_vector_dependencies_async(min_interval_seconds=10.0)
         with _vector_ready_lock:
             cache_age = time.monotonic() - _vector_ready_cache["last_check"]
-            cache_fresh = cache_age <= 15.0
-            if cache_fresh and _vector_ready_cache["ready"]:
+            cache_fresh = cache_age <= 60.0
+            if _vector_ready_cache["ready"] and not _vector_ready_cache["last_error"]:
+                health_status["vector_store"] = True
+            elif cache_fresh and _vector_ready_cache["ready"]:
                 health_status["vector_store"] = True
             elif _vector_ready_cache["last_error"]:
                 logger.warning("Readiness check - vector store: %s", _vector_ready_cache["last_error"])

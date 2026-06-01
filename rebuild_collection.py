@@ -1,7 +1,7 @@
 """
 rebuild_collection.py
 Recreates the AcademeRAG collection on Zilliz Cloud with the correct schema:
-  - vector dim=1024 (mxbai-embed-large)
+  - vector dim=1024 (bge-m3:latest)
   - COSINE metric
   - AUTOINDEX
   - Scalar INVERTED indexes on source, page_number, chunk_index

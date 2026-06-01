@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 from dotenv import load_dotenv
 load_dotenv()
 
-# We need to import the core engine from Milvus.py
+# Import the core engine from the database package
 try:
-    from Milvus import (
+    from database import (
         _search_cloud_milvus,
         _search_local_milvus,
         _search_bm25_fallback,
@@ -25,7 +25,7 @@ try:
     )
     from langchain_ollama import OllamaEmbeddings
 except ImportError as e:
-    logger.error("Failed to import from Milvus.py: %s", e)
+    logger.error("Failed to import from database package: %s", e)
     sys.exit(1)
 
 def print_results(label, docs):

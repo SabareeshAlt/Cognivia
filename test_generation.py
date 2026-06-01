@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 try:
-    from Milvus import _retrieve_docs, _format_context
+    from database import _retrieve_docs, _format_context
     from langchain_ollama import ChatOllama
     from langchain_core.prompts import ChatPromptTemplate
     from langchain_core.output_parsers import StrOutputParser

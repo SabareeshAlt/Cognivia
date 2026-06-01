@@ -19,12 +19,16 @@ from typing import Any, List
 # Ensure we can import the backend modular RAG
 sys.path.append(str(Path(__file__).parent.parent))
 
-# Fallback in case we haven't fully refactored, import monolithic Milvus
+# Import from the database package
 try:
     from rag.llm_orchestration import get_optimized_response
-    from Milvus import _retrieve_docs
+    from database import _retrieve_docs
 except ImportError:
-    from Milvus import get_optimized_response, _retrieve_docs
+    from database import _retrieve_docs
+    try:
+        from rag.llm_orchestration import get_optimized_response
+    except ImportError:
+        get_optimized_response = None
 
 
 class LLMEvaluator:

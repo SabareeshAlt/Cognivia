@@ -8,7 +8,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from Milvus import (  # noqa: E402
+from database import (  # noqa: E402
     _get_milvus_config,
     collection_exists,
     compute_rebuild_state,

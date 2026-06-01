@@ -35,7 +35,7 @@ class ApiConfig(AppConfig):
 
         def _warmup_active_stack():
             try:
-                from Milvus import get_retriever, preload_cross_encoder, OLLAMA_BASE_URL, EMBEDDING_MODEL, LLM_MODEL
+                from database import get_retriever, preload_cross_encoder, OLLAMA_BASE_URL, EMBEDDING_MODEL, LLM_MODEL
                 import requests
 
                 logger.info("Starting RAG warmup...")
@@ -67,6 +67,14 @@ class ApiConfig(AppConfig):
                     )
                 except Exception as e:
                     logger.warning("Ollama LLM model warmup failed: %s", e)
+
+                # 5. Populate vector readiness cache
+                try:
+                    logger.info("Populating initial vector readiness cache...")
+                    from api.views import _probe_vector_dependencies
+                    _probe_vector_dependencies()
+                except Exception as e:
+                    logger.warning("Failed to populate initial vector readiness cache: %s", e)
 
                 logger.info("RAG warmup completed.")
             except Exception as exc:

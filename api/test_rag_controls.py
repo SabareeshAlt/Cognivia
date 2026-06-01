@@ -1,7 +1,7 @@
 from unittest import TestCase
 from unittest.mock import patch
 
-import Milvus
+import database
 from langchain_core.documents import Document
 from rag.llm_orchestration import get_optimized_response
 from rag.scoring import compute_pipeline_score
@@ -10,8 +10,8 @@ from rag.scoring import compute_pipeline_score
 class RagControlsTests(TestCase):
     def test_answer_generation_runs_when_docs_exist(self):
         docs = [Document(page_content="Course Objectives: Learn Boolean algebra.", metadata={"page_number": 10})]
-        with patch("Milvus._retrieve_docs", return_value=docs), patch(
-            "Milvus._augment_docs_for_syllabus",
+        with patch("database.retrieval._retrieve_docs", return_value=docs), patch(
+            "database.metadata._augment_docs_for_syllabus",
             return_value=docs,
         ), patch("rag.llm_orchestration._invoke_with_provider_failover", return_value="Grounded answer") as mock_invoke:
             answer = get_optimized_response("What are the course objectives of Digital Logic Design?")

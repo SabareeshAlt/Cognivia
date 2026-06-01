@@ -90,7 +90,7 @@ class SecurityTests(TestCase):
 
     @patch("magic.from_file")
     def test_malformed_pdf_rejection(self, mock_magic):
-        import Milvus
+        import database as Milvus
         
         bad_item = {
             "path": "dummy.pdf",
