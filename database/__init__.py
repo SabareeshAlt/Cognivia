@@ -62,7 +62,10 @@ from database.config import (
     _get_local_config,
     _get_milvus_config,
     _looks_like_placeholder,
+    _milvus_endpoint_reachable,
     _required_env,
+    _validate_milvus_connection,
+    _get_active_milvus_mode,
 )
 
 # ---- 3. Embedding ----
@@ -127,27 +130,36 @@ from database.bm25 import (
 
 # ---- 7. Milvus client ----
 from database.milvus_client import (
-    CLOUD_COOLDOWN_SECONDS,
-    CLOUD_FAILURE_THRESHOLD,
+    _CB_CLOSED,
+    _CB_HALF_OPEN,
+    _CB_OPEN,
     _background_sync_lock,
     _background_sync_state,
     _build_langchain_vector_store,
-    _cloud_circuit_breaker,
+    _cache_get,
+    _cache_set,
+    _cloud_circuit_open,
     _connect_milvus_client,
     _connect_milvus_client_with_timeout,
     _ensure_langchain_milvus_connection,
+    _get_cb_state,
+    _handle_cloud_failure,
+    _handle_cloud_success,
     _mark_milvus_unhealthy,
     _milvus_circuit_open,
     _milvus_cloud_ready,
-    _milvus_endpoint_reachable,
     _milvus_health,
     _search_cloud_milvus,
     _search_local_milvus,
     _search_milvus_with_config,
+    _start_cloud_recovery_monitor,
+    _transition_to_half_open_if_needed,
     _vector_store_cache,
     _vector_store_lock,
+    check_and_log_metadata_discrepancies,
     collection_exists,
     ensure_collection_schema,
+    validate_collection_compatibility,
 )
 
 # ---- 8. Ingestion ----
@@ -191,3 +203,9 @@ from database.retrieval import (
 # Startup: build BM25 index synchronously (mirrors Milvus.py line 2122)
 # ---------------------------------------------------------------------------
 _init_bm25_index_at_startup()
+
+# ---------------------------------------------------------------------------
+# Startup: launch background Milvus cloud recovery monitor (daemon thread)
+# ---------------------------------------------------------------------------
+_start_cloud_recovery_monitor()
+

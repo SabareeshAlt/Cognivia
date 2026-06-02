@@ -314,3 +314,194 @@ class CitationCleaningTests(TestCase):
         self.assertEqual(clean_citations("Hello [Source: course_info.pdf, Page abc] world"), "Hello world")
         self.assertEqual(clean_citations("Hello [Source: , Page 12] world"), "Hello world")
 
+
+# ---------------------------------------------------------------------------
+# Resiliency test suite: Django-cache circuit breaker & recovery
+# ---------------------------------------------------------------------------
+
+class CircuitBreakerCacheStateTests(TestCase):
+    """Validates CLOSED -> OPEN -> HALF_OPEN -> CLOSED state transitions."""
+
+    def setUp(self):
+        cache.clear()
+
+    def test_initial_state_is_closed(self):
+        from database.milvus_client import _get_cb_state, _CB_CLOSED
+        self.assertEqual(_get_cb_state(), _CB_CLOSED)
+
+    def test_two_failures_open_circuit(self):
+        from database.milvus_client import (
+            _handle_cloud_failure, _get_cb_state,
+            _CB_OPEN, _CB_FAILURE_THRESHOLD,
+        )
+        exc = RuntimeError("connection refused")
+        for _ in range(_CB_FAILURE_THRESHOLD):
+            _handle_cloud_failure(exc)
+        self.assertEqual(_get_cb_state(), _CB_OPEN)
+
+    def test_open_circuit_transitions_to_half_open_after_ttl(self):
+        """Simulate TTL expiry by manually deleting the OPEN state key."""
+        from database.milvus_client import (
+            _CB_STATE_KEY, _CB_FAILURES_KEY, _CB_FAILURE_THRESHOLD,
+            _CB_OPEN, _CB_HALF_OPEN,
+            _transition_to_half_open_if_needed, _cache_set, _cache_get,
+        )
+        # Set up the OPEN state manually
+        _cache_set(_CB_STATE_KEY, _CB_OPEN)
+        _cache_set(_CB_FAILURES_KEY, _CB_FAILURE_THRESHOLD)
+
+        # Simulate TTL expiry: delete the OPEN key (as Django cache would after timeout)
+        from django.core.cache import cache as djcache
+        djcache.delete(_CB_STATE_KEY)
+
+        # Now _get_cb_state returns CLOSED (default); transition logic should detect
+        # that failures >= threshold and move to HALF_OPEN
+        result = _transition_to_half_open_if_needed()
+        self.assertTrue(result)
+        from database.milvus_client import _get_cb_state
+        self.assertEqual(_get_cb_state(), _CB_HALF_OPEN)
+
+    def test_half_open_failure_reopens_circuit(self):
+        from database.milvus_client import (
+            _CB_STATE_KEY, _CB_HALF_OPEN, _CB_OPEN,
+            _handle_cloud_failure, _get_cb_state, _cache_set,
+        )
+        _cache_set(_CB_STATE_KEY, _CB_HALF_OPEN)
+        _handle_cloud_failure(RuntimeError("probe failed"))
+        self.assertEqual(_get_cb_state(), _CB_OPEN)
+
+    def test_cloud_circuit_open_returns_true_when_open(self):
+        from database.milvus_client import (
+            _CB_STATE_KEY, _CB_OPEN, _cloud_circuit_open, _cache_set,
+        )
+        _cache_set(_CB_STATE_KEY, _CB_OPEN)
+        self.assertTrue(_cloud_circuit_open())
+
+    def test_cloud_circuit_open_returns_false_when_closed(self):
+        from database.milvus_client import _cloud_circuit_open, _CB_STATE_KEY, _CB_CLOSED, _cache_set
+        _cache_set(_CB_STATE_KEY, _CB_CLOSED)
+        self.assertFalse(_cloud_circuit_open())
+
+
+class ControlledRecoveryTests(TestCase):
+    """Asserts HALF_OPEN -> CLOSED requires exactly 3 consecutive successes."""
+
+    def setUp(self):
+        cache.clear()
+
+    def test_single_success_does_not_close_circuit(self):
+        from database.milvus_client import (
+            _CB_STATE_KEY, _CB_HALF_OPEN, _CB_CLOSED,
+            _handle_cloud_success, _get_cb_state, _cache_set,
+        )
+        _cache_set(_CB_STATE_KEY, _CB_HALF_OPEN)
+        _handle_cloud_success()
+        self.assertNotEqual(_get_cb_state(), _CB_CLOSED)
+
+    def test_two_successes_do_not_close_circuit(self):
+        from database.milvus_client import (
+            _CB_STATE_KEY, _CB_HALF_OPEN, _CB_CLOSED,
+            _handle_cloud_success, _get_cb_state, _cache_set,
+        )
+        _cache_set(_CB_STATE_KEY, _CB_HALF_OPEN)
+        _handle_cloud_success()
+        _handle_cloud_success()
+        self.assertNotEqual(_get_cb_state(), _CB_CLOSED)
+
+    def test_three_successes_close_circuit(self):
+        from database.milvus_client import (
+            _CB_STATE_KEY, _CB_HALF_OPEN, _CB_CLOSED,
+            _handle_cloud_success, _get_cb_state, _cache_set,
+        )
+        _cache_set(_CB_STATE_KEY, _CB_HALF_OPEN)
+        _handle_cloud_success()
+        _handle_cloud_success()
+        _handle_cloud_success()
+        self.assertEqual(_get_cb_state(), _CB_CLOSED)
+
+    def test_failure_mid_recovery_resets_success_count(self):
+        from database.milvus_client import (
+            _CB_STATE_KEY, _CB_SUCCESSES_KEY, _CB_HALF_OPEN, _CB_OPEN,
+            _handle_cloud_success, _handle_cloud_failure,
+            _get_cb_state, _cache_get, _cache_set,
+        )
+        _cache_set(_CB_STATE_KEY, _CB_HALF_OPEN)
+        _handle_cloud_success()
+        _handle_cloud_success()
+        # 2 successes, then a failure — should reopen and reset counter
+        _handle_cloud_failure(RuntimeError("intermittent failure"))
+        self.assertEqual(_get_cb_state(), _CB_OPEN)
+        self.assertEqual(_cache_get(_CB_SUCCESSES_KEY, 0), 0)
+
+
+class RetrievalFailoverLatencyTests(TestCase):
+    """Asserts that failing over to local Milvus when cloud is offline is fast."""
+
+    def setUp(self):
+        cache.clear()
+
+    @patch("database.retrieval._search_cloud_milvus", return_value=[])
+    @patch("database.retrieval._search_local_milvus", return_value=[])
+    @patch("database.retrieval.get_embeddings")
+    def test_failover_latency_under_500ms(self, mock_embeddings, mock_local, mock_cloud):
+        """Dense pipeline with cloud returning [] should fall back to local under 500ms."""
+        import time
+        mock_embeddings.return_value.embed_query.return_value = [0.1] * 1024
+
+        from database.retrieval import _dense_search_pipeline
+        start = time.perf_counter()
+        _dense_search_pipeline("test failover query", k=5, target_sources=None)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+
+        self.assertLess(elapsed_ms, 500, f"Failover took {elapsed_ms:.1f}ms, expected < 500ms")
+        mock_cloud.assert_called_once()
+        mock_local.assert_called_once()
+
+
+class MetadataVerificationTests(TestCase):
+    """Verifies that metadata checks use collection stats, not row scans."""
+
+    def setUp(self):
+        cache.clear()
+
+    @patch("database.milvus_client._connect_milvus_client_with_timeout")
+    @patch("database.milvus_client._milvus_endpoint_reachable", return_value=False)
+    def test_metadata_check_skips_cloud_when_unreachable(self, mock_reachable, mock_connect):
+        """When cloud is unreachable, only local stats are queried."""
+        from database.milvus_client import check_and_log_metadata_discrepancies
+
+        mock_client = mock_connect.return_value
+        mock_client.get_collection_stats.return_value = {"row_count": 5600}
+
+        # Should not raise even if cloud is unreachable
+        check_and_log_metadata_discrepancies()
+
+        # Cloud reachability was checked
+        mock_reachable.assert_called()
+        # Only local client was connected (cloud skipped due to unreachable)
+        self.assertEqual(mock_connect.call_count, 1)
+
+    @patch("database.milvus_client._connect_milvus_client_with_timeout")
+    @patch("database.milvus_client._milvus_endpoint_reachable", return_value=True)
+    @patch("database.milvus_client._get_cloud_config")
+    def test_metadata_uses_get_collection_stats_not_query(self, mock_cloud_cfg, mock_reachable, mock_connect):
+        """Ensure stats are retrieved via get_collection_stats, not search/query scans."""
+        from database.milvus_client import check_and_log_metadata_discrepancies
+
+        mock_cloud_cfg.return_value = {
+            "uri": "https://cloud.example.com",
+            "token": "tok",
+            "collection": "AcademeRAG",
+            "model": "bge-m3:latest",
+        }
+        mock_client = mock_connect.return_value
+        mock_client.get_collection_stats.return_value = {"row_count": 5600}
+
+        check_and_log_metadata_discrepancies()
+
+        # get_collection_stats must be called, never search or query
+        self.assertTrue(mock_client.get_collection_stats.called)
+        self.assertFalse(mock_client.search.called if hasattr(mock_client, "search") else False)
+        self.assertFalse(mock_client.query.called if hasattr(mock_client, "query") else False)
+
+

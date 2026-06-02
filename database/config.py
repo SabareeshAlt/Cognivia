@@ -8,6 +8,11 @@ for config — to avoid circular imports.
 """
 
 import os
+import socket
+import threading
+import time
+from urllib.parse import urlparse
+
 from dotenv import load_dotenv
 
 # ---------------------------------------------------------------------------
@@ -164,3 +169,77 @@ def _get_local_config() -> dict:
 
 def _chunk_profile() -> str:
     return f"size={CHUNK_SIZE};overlap={CHUNK_OVERLAP};embed={EMBEDDING_MODEL}"
+
+
+# ---------------------------------------------------------------------------
+# Connectivity probing (socket-level, TTL-cached)
+# ---------------------------------------------------------------------------
+
+_connectivity_cache: dict = {
+    "reachable": None,
+    "checked_at": 0.0,
+}
+_connectivity_lock = threading.Lock()
+
+
+def _milvus_endpoint_reachable(
+    cfg: dict, ttl_seconds: float = 60.0, force_check: bool = False
+) -> bool:
+    """Return True if the Milvus URI is reachable via a TCP socket probe.
+
+    Results are cached for `ttl_seconds`.  Local file-based URIs are always
+    considered reachable without a network probe.
+    """
+    import logging
+    _log = logging.getLogger(__name__)
+
+    uri = cfg.get("uri", "")
+    if not uri:
+        return False
+    # File-based Milvus Lite URIs — always local
+    if not (uri.startswith("http://") or uri.startswith("https://") or uri.startswith("tcp://")):
+        return True
+
+    now = time.monotonic()
+    if not force_check:
+        with _connectivity_lock:
+            if (
+                _connectivity_cache["reachable"] is not None
+                and (now - _connectivity_cache["checked_at"]) < ttl_seconds
+            ):
+                return _connectivity_cache["reachable"]
+
+    reachable = False
+    try:
+        parsed = urlparse(uri)
+        hostname = parsed.hostname
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        if hostname:
+            socket.gethostbyname(hostname)  # DNS check
+            with socket.create_connection((hostname, port), timeout=1.0):
+                reachable = True
+    except Exception as exc:
+        _log.debug("Milvus endpoint unreachable (%s): %s", uri, exc)
+
+    with _connectivity_lock:
+        _connectivity_cache["reachable"] = reachable
+        _connectivity_cache["checked_at"] = now
+    return reachable
+
+
+def _validate_milvus_connection(cfg: dict) -> bool:
+    """Perform a live Milvus round-trip validation (has_collection probe)."""
+    try:
+        if not _milvus_endpoint_reachable(cfg, force_check=True):
+            return False
+        from pymilvus import MilvusClient  # local import to avoid circular
+        client = MilvusClient(uri=cfg["uri"], token=cfg["token"], timeout=2.5)
+        client.has_collection(cfg["collection"])
+        return True
+    except Exception:
+        return False
+
+
+def _get_active_milvus_mode() -> str:
+    """Return the active Milvus mode string: AUTO | CLOUD | LOCAL."""
+    return os.getenv("ACADEMERAG_MILVUS_MODE", "AUTO").strip().upper()

@@ -300,15 +300,52 @@ for var in required_vars:
         sys.exit(1)
 print_check("Environment Loaded")
 
-# 2. Milvus Connected
+# 2. Milvus Connectivity (dual-mode: cloud primary, local fallback)
+cloud_ok = False
+local_ok = False
 try:
-    from pymilvus import MilvusClient
-    uri = os.environ.get("ACADEMERAG_MILVUS_URI", "./milvus_local.db")
+    uri = os.environ.get("ACADEMERAG_MILVUS_URI", "")
     token = os.environ.get("ACADEMERAG_MILVUS_TOKEN", "")
-    if uri.startswith("./") or uri.startswith("../") or not (uri.startswith("http://") or uri.startswith("https://")):
-        uri = str(ROOT / uri)
-    client = MilvusClient(uri=uri, token=token)
-    print_check("Milvus Connected")
+    # Attempt cloud connection if URI is a network endpoint
+    if uri.startswith("http://") or uri.startswith("https://") or uri.startswith("tcp://"):
+        import socket
+        import urllib.parse as _up
+        _parsed = _up.urlparse(uri)
+        _host = _parsed.hostname
+        _port = _parsed.port or (443 if _parsed.scheme == "https" else 80)
+        try:
+            socket.gethostbyname(_host)
+            with socket.create_connection((_host, _port), timeout=2.0):
+                pass
+            from pymilvus import MilvusClient as _MC
+            _mc = _MC(uri=uri, token=token, timeout=5.0)
+            _mc.list_collections()
+            cloud_ok = True
+        except Exception as _ce:
+            print(f"WARNING: Cloud Milvus unreachable: {_ce}. Will use local fallback.", file=sys.stderr)
+    else:
+        # URI is already a local file path — treat as local
+        local_ok = True
+
+    if not cloud_ok:
+        # Validate local Milvus Lite fallback
+        local_uri = str(ROOT / "milvus_local.db")
+        try:
+            from pymilvus import MilvusClient as _LMC
+            _lmc = _LMC(uri=local_uri)
+            _lmc.list_collections()
+            local_ok = True
+        except Exception as _le:
+            print(f"ERROR: Local Milvus fallback also unavailable: {_le}", file=sys.stderr)
+
+    if not cloud_ok and not local_ok:
+        print("ERROR: Both cloud and local Milvus are unavailable. Cannot start.", file=sys.stderr)
+        sys.exit(1)
+
+    if cloud_ok:
+        print_check("Milvus Cloud Connected")
+    else:
+        print_check("Milvus Local Fallback Connected")
 except Exception as exc:
     print(f"ERROR: Milvus connection check failed: {exc}", file=sys.stderr)
     sys.exit(1)
