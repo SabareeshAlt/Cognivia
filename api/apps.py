@@ -15,11 +15,8 @@ class ApiConfig(AppConfig):
         Warm up active RAG components for faster first request.
         """
         import os
+        import threading
         
-        # Warmup is opt-in to keep tests/CI deterministic.
-        if os.environ.get("RAG_WARMUP_ON_STARTUP", "false").lower() != "true":
-            return
-
         # Avoid duplicate warmups under autoreloader parent process.
         # But allow warmup when running with --noreload or not in DEBUG mode.
         from django.conf import settings
@@ -27,10 +24,26 @@ class ApiConfig(AppConfig):
         
         is_reloader_parent = (
             os.environ.get("RUN_MAIN") != "true" and 
-            "--noreload" not in sys.argv and 
-            settings.DEBUG
+            "runserver" in sys.argv and
+            "--noreload" not in sys.argv
         )
         if is_reloader_parent:
+            return
+
+        # 1. ALWAYS initialize the BM25 index in a background thread to prevent cold starts
+        def _init_bm25_bg():
+            try:
+                from database.bm25 import _init_bm25_index_at_startup
+                logger.info("Initializing BM25 index in background thread...")
+                _init_bm25_index_at_startup()
+                logger.info("BM25 index initialization completed.")
+            except Exception as e:
+                logger.error("Failed to initialize BM25 index in background: %s", e)
+
+        threading.Thread(target=_init_bm25_bg, daemon=True).start()
+
+        # Warmup is opt-in to keep tests/CI deterministic.
+        if os.environ.get("RAG_WARMUP_ON_STARTUP", "false").lower() != "true":
             return
 
         def _warmup_active_stack():

@@ -129,7 +129,7 @@ def evaluate_generation(question: str, reference_keywords: list, expected_source
     keyword_hit_rate = keyword_hits / len(keywords) if keywords else 1.0
     
     # check if citations are generated, e.g. [Source: ...] or any variant
-    has_citation = True
+    has_citation = bool(re.search(r'\[Source:\s*[^,\]]+(?:,\s*Page:?\s*\d+)?\]', answer, re.IGNORECASE))
     return keyword_hit_rate, has_citation, answer
 
 def main():

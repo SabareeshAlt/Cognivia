@@ -380,6 +380,38 @@ def initialize_vector_store(
     should_sync, reason = compute_sync_decision(file_metadata, tracked_hashes, force_reindex)
     should_sync = should_sync and auto_sync
 
+    # Divergence check: if Django thinks everything is synced, verify that Milvus actually has chunks
+    if not should_sync and auto_sync:
+        try:
+            from database.milvus_client import _connect_milvus_client_with_timeout
+            client = _connect_milvus_client_with_timeout(cfg, timeout_seconds=MILVUS_HEALTHCHECK_TIMEOUT_SECONDS)
+            if client.has_collection(cfg["collection"]):
+                for item in file_metadata:
+                    source_name = item["source"]
+                    from database.metadata import _milvus_source_filter_expr
+                    expr = _milvus_source_filter_expr({source_name})
+                    if expr:
+                        res = client.query(
+                            collection_name=cfg["collection"],
+                            filter=expr,
+                            output_fields=["source"],
+                            limit=1
+                        )
+                        if not res:
+                            should_sync = True
+                            reason = f"divergence-milvus-missing-chunks:{source_name}"
+                            logger.warning(
+                                "Sync divergence: source '%s' has no chunks in Milvus. Forcing rebuild.",
+                                source_name
+                            )
+                            break
+            else:
+                should_sync = True
+                reason = "milvus-collection-missing"
+                logger.warning("Milvus collection '%s' does not exist. Forcing rebuild.", cfg["collection"])
+        except Exception as e:
+            logger.warning("Failed to verify Milvus collection sync count: %s", e)
+
     try:
         if should_sync:
             if allow_background_sync and not force_reindex:

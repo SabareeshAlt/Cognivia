@@ -230,6 +230,7 @@ def _create_llm_client(provider: str):
             base_url=OLLAMA_BASE_URL,
             temperature=LLM_TEMPERATURE,
             keep_alive=-1,
+            timeout=60.0,
         )
 
     raise RuntimeError(f"Unknown LLM provider: {provider!r}")

@@ -55,7 +55,7 @@ def _load_rag_modules():
     try:
         milvus_module = importlib.import_module("database")
         llm_module = importlib.import_module("rag.llm_orchestration")
-        if _rag_modules_loaded:
+        if _rag_modules_loaded and settings.DEBUG:
             milvus_module = importlib.reload(milvus_module)
             llm_module = importlib.reload(llm_module)
 
@@ -309,7 +309,6 @@ def health_ready(request):
 
     try:
         import requests as http_requests
-
         ollama_url = getattr(settings, "OLLAMA_HEALTHCHECK_URL", "http://localhost:11434").rstrip("/") + "/"
         resp = http_requests.get(ollama_url, timeout=2)
         if resp.status_code == 200:

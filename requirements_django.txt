@@ -20,6 +20,8 @@ tiktoken>=0.5.0
 
 # Document Processing
 pypdf>=4.0.0
+pymupdf>=1.24.0
+pdfplumber>=0.11.0
 python-magic>=0.4.27
 
 # Vector Stores

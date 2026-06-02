@@ -134,6 +134,7 @@ def calculate_citation_confidence_score(answer: str, docs: List[Document]) -> fl
     """
     Evaluates whether output assertions trace back to retrieved sources.
     """
+    import os
     ans_lower = answer.lower()
     refusal_keywords = [
         "not found", "insufficient context", "do not have", "don't have",
@@ -145,20 +146,98 @@ def calculate_citation_confidence_score(answer: str, docs: List[Document]) -> fl
     if not docs:
         return 100.0
         
-    citations = re.findall(r'\[Source:\s*([^,\]]+)(?:,\s*Page:?\s*\d+)?\]', answer, re.IGNORECASE)
+    citations = list(re.finditer(r'\[Source:\s*([^,\]]+)(?:,\s*Page:?\s*(\d+))?\]', answer, re.IGNORECASE))
     if not citations:
         return 50.0 # Penalty for claiming facts without references
         
-    retrieved_sources = {doc.metadata.get("source", "").lower() for doc in docs if doc.metadata}
+    try:
+        from database import _page_text_map
+        text_map = _page_text_map()
+    except Exception:
+        text_map = {}
+        
+    last_idx = 0
+    scores = []
     
-    matched = 0
-    for cit in citations:
-        cit_clean = cit.strip().lower()
-        if any(cit_clean in src for src in retrieved_sources):
-            matched += 1
+    for match in citations:
+        source = match.group(1).strip().lower()
+        page_str = match.group(2)
+        page_num = int(page_str) if page_str else None
+        
+        # Text block associated with this citation (preceding it)
+        start_idx = last_idx
+        end_idx = match.start()
+        context_text = answer[start_idx:end_idx].strip()
+        
+        # If there are multiple sentences in the context_text, take the last sentence
+        # because the citation usually applies to the sentence immediately preceding it.
+        sentences = re.split(r'(?<=[.!?])\s+', context_text)
+        if sentences:
+            citation_context = sentences[-1]
+        else:
+            citation_context = context_text
             
-    ratio = matched / len(citations)
-    return round(ratio * 100.0, 1)
+        last_idx = match.end()
+        
+        # Tokenize the citation context
+        context_words = _tokenize(citation_context)
+        context_tokens = set(
+            w for w in context_words
+            if w not in STOPWORDS and w not in ANSWER_FRAMING_TERMS and (w.isdigit() or len(w) >= 3)
+        )
+        
+        if not context_tokens:
+            scores.append(1.0)
+            continue
+            
+        # Try to find page text from _page_text_map
+        page_text = ""
+        if page_num is not None:
+            for (rel_path, p_no), txt in text_map.items():
+                if p_no == page_num:
+                    basename = os.path.basename(rel_path).lower()
+                    if basename == source or rel_path.lower() == source or basename.replace('.pdf', '') == source:
+                        page_text = txt
+                        break
+        else:
+            # Join all pages of that file from text_map
+            all_pages_txt = []
+            for (rel_path, p_no), txt in text_map.items():
+                basename = os.path.basename(rel_path).lower()
+                if basename == source or rel_path.lower() == source or basename.replace('.pdf', '') == source:
+                    all_pages_txt.append(txt)
+            if all_pages_txt:
+                page_text = "\n".join(all_pages_txt)
+        
+        # If not found in page_text_map, fallback to docs matching the citation
+        if not page_text:
+            fallback_contents = []
+            for doc in docs:
+                doc_meta = doc.metadata or {}
+                doc_src = doc_meta.get("source", "").lower()
+                doc_page = doc_meta.get("page_number")
+                doc_basename = os.path.basename(doc_meta.get("document_path", "")).lower()
+                
+                src_match = (doc_src == source or doc_basename == source or doc_src.replace('.pdf', '') == source)
+                page_match = (page_num is None or doc_page == page_num)
+                
+                if src_match and page_match:
+                    fallback_contents.append(doc.page_content)
+            if fallback_contents:
+                page_text = "\n".join(fallback_contents)
+                
+        if page_text:
+            page_tokens = set(_tokenize(page_text))
+            overlap = context_tokens & page_tokens
+            overlap_ratio = len(overlap) / len(context_tokens)
+            scores.append(overlap_ratio)
+        else:
+            # If we can't find the source/page text anywhere, default to 0.7 (moderate confidence)
+            scores.append(0.7)
+            
+    if not scores:
+        return 50.0
+    return round((sum(scores) / len(scores)) * 100.0, 1)
 
 def get_confidence_label(score: float) -> str:
     if score >= 95:

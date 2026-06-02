@@ -200,11 +200,6 @@ from database.retrieval import (
 )
 
 # ---------------------------------------------------------------------------
-# Startup: build BM25 index synchronously (mirrors Milvus.py line 2122)
-# ---------------------------------------------------------------------------
-_init_bm25_index_at_startup()
-
-# ---------------------------------------------------------------------------
 # Startup: launch background Milvus cloud recovery monitor (daemon thread)
 # ---------------------------------------------------------------------------
 _start_cloud_recovery_monitor()

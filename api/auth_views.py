@@ -91,16 +91,8 @@ def login(request):
     password = (data.get("password") or "").strip()
 
     user = authenticate(request, username=email, password=password)
-    if user is None:
-        try:
-            db_user = User.objects.filter(username=email).first()
-            if db_user and not db_user.is_active and db_user.check_password(password):
-                return json_error(request, "Account is disabled", 403)
-        except Exception:
-            pass
-        return json_error(request, "Invalid credentials", 401)
-    if not getattr(user, "is_active", False):
-        return json_error(request, "Account is disabled", 403)
+    if user is None or not getattr(user, "is_active", False):
+        return json_error(request, "Invalid email or password", 401)
 
     tokens = _issue_tokens(user)
     return JsonResponse(

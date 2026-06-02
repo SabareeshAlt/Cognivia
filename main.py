@@ -94,9 +94,13 @@ def resolve_start_port(host, preferred_port, service_name, max_tries=50, strict_
 
 def wait_for_http(url, timeout_s=120):
     deadline = time.time() + timeout_s
+    import urllib.request
+    token = os.environ.get("HEALTH_CHECK_TOKEN", "default-health-token-12345")
     while time.time() < deadline:
         try:
-            with urlopen(url, timeout=2) as resp:  # nosec B310 - local dev URL
+            req = urllib.request.Request(url)
+            req.add_header("X-Health-Token", token)
+            with urlopen(req, timeout=2) as resp:  # nosec B310 - local dev URL
                 if 200 <= resp.status < 500:
                     return True
         except (URLError, TimeoutError):

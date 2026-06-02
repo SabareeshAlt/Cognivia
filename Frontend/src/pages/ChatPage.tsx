@@ -405,6 +405,7 @@ const ChatPage = () => {
       const decoder = new TextDecoder();
       let botText = "";
       let buffer = "";
+      let isDone = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -430,12 +431,15 @@ const ChatPage = () => {
                 });
               } else if (parsed.type === "error") {
                 throw new ApiError(parsed.content || "An unexpected error occurred.", 500, "STREAM_ERROR");
+              } else if (parsed.type === "done") {
+                isDone = true;
               }
             } catch (e) {
               if (e instanceof ApiError) throw e;
             }
           }
         }
+        if (isDone) break;
       }
 
       if (buffer.trim()) {

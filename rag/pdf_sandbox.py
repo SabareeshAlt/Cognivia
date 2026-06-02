@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 def _extract_worker(path: str, result_queue: multiprocessing.Queue):
     """
     Worker function to extract PDF text in an isolated process.
+    Chains PyMuPDF (fitz) -> pdfplumber -> pypdf as fallback.
     """
     try:
         # Validate magic bytes
@@ -35,14 +36,72 @@ def _extract_worker(path: str, result_queue: multiprocessing.Queue):
             result_queue.put({"success": False, "error": f"Invalid MIME type {mime} for {path}"})
             return
 
-        reader = PdfReader(path)
         pages = []
-        for i, page in enumerate(reader.pages):
-            text = page.extract_text()
-            if text:
-                pages.append({"page_number": i + 1, "text": text})
+        engine_used = None
+        
+        # 1. Try PyMuPDF (fitz)
+        try:
+            import fitz
+            doc = fitz.open(path)
+            temp_pages = []
+            for i, page in enumerate(doc):
+                text = page.get_text()
+                temp_pages.append({"page_number": i + 1, "text": text or ""})
+            doc.close()
+            total_chars = sum(len(p["text"]) for p in temp_pages)
+            if total_chars > 0:
+                pages = temp_pages
+                engine_used = "pymupdf"
+                logger.info(f"Successfully extracted PDF text using PyMuPDF from {path}")
+        except Exception as e:
+            logger.warning(f"PyMuPDF extraction failed for {path}: {e}")
 
-        result_queue.put({"success": True, "pages": pages})
+        # 2. Try pdfplumber as fallback
+        if not engine_used:
+            try:
+                import pdfplumber
+                temp_pages = []
+                with pdfplumber.open(path) as pdf:
+                    for i, page in enumerate(pdf.pages):
+                        text = page.extract_text()
+                        temp_pages.append({"page_number": i + 1, "text": text or ""})
+                total_chars = sum(len(p["text"]) for p in temp_pages)
+                if total_chars > 0:
+                    pages = temp_pages
+                    engine_used = "pdfplumber"
+                    logger.info(f"Successfully extracted PDF text using pdfplumber from {path}")
+            except Exception as e:
+                logger.warning(f"pdfplumber extraction failed for {path}: {e}")
+
+        # 3. Try pypdf as final fallback
+        if not engine_used:
+            try:
+                reader = PdfReader(path)
+                temp_pages = []
+                for i, page in enumerate(reader.pages):
+                    text = page.extract_text()
+                    temp_pages.append({"page_number": i + 1, "text": text or ""})
+                total_chars = sum(len(p["text"]) for p in temp_pages)
+                pages = temp_pages
+                engine_used = "pypdf"
+                logger.info(f"Successfully extracted PDF text using pypdf from {path}")
+            except Exception as e:
+                logger.error(f"pypdf extraction failed for {path}: {e}")
+                raise
+
+        total_chars = sum(len(p["text"]) for p in pages)
+        page_count = len(pages)
+        logger.info(f"Extraction metrics for {path}: Pages={page_count}, Characters={total_chars}, Engine={engine_used}")
+        
+        result_queue.put({
+            "success": True,
+            "pages": pages,
+            "metrics": {
+                "character_count": total_chars,
+                "page_count": page_count,
+                "engine": engine_used
+            }
+        })
     except Exception as e:
         logger.error(f"Error in PDF sandbox for {path}: {traceback.format_exc()}")
         result_queue.put({"success": False, "error": str(e)})

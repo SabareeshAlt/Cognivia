@@ -244,6 +244,31 @@ def _retrieve_docs(question: str) -> list:
 # Context formatter
 # ---------------------------------------------------------------------------
 
+def _sanitize_context_text(text: str) -> str:
+    """Strip or redact prompt injection keywords from retrieved context."""
+    if not text:
+        return ""
+    injection_patterns = [
+        r"(?i)ignore\s+(?:all\s+)?(?:previous\s+)?instructions",
+        r"(?i)forget\s+(?:all\s+)?(?:previous\s+)?instructions",
+        r"(?i)bypass\s+(?:all\s+)?(?:previous\s+)?instructions",
+        r"(?i)system\s+prompt",
+        r"(?i)jailbreak",
+        r"(?i)developer\s+mode",
+        r"(?i)do\s+anything\s+now",
+        r"(?i)dan\s+mode",
+        r"(?i)you\s+are\s+now",
+        r"(?i)act\s+as",
+        r"(?i)pretend\s+to\s+be",
+        r"(?i)forget\s+everything",
+        r"(?i)override\s+(?:all\s+)?(?:previous\s+)?instructions",
+    ]
+    sanitized = text
+    for pattern in injection_patterns:
+        sanitized = re.sub(pattern, "[redacted command]", sanitized)
+    return sanitized
+
+
 def _format_context(docs, max_chars: int = 32000) -> str:
     docs = sorted(docs, key=lambda d: (
         str((d.metadata or {}).get("source", "")),
@@ -265,7 +290,7 @@ def _format_context(docs, max_chars: int = 32000) -> str:
             page = (doc.metadata or {}).get('page_number', 'unknown')
             section = (doc.metadata or {}).get('section_type', 'unknown')
             chunk_header = f"[Source: {source} | Page {page} | Section {section}]\n"
-            content = doc.page_content
+            content = _sanitize_context_text(doc.page_content)
             header_tokens = len(encoder.encode(chunk_header))
             content_tokens = len(encoder.encode(content))
             total_chunk_tokens = header_tokens + content_tokens
@@ -288,7 +313,7 @@ def _format_context(docs, max_chars: int = 32000) -> str:
             page = (doc.metadata or {}).get('page_number', 'unknown')
             section = (doc.metadata or {}).get('section_type', 'unknown')
             chunk_header = f"[Source: {source} | Page {page} | Section {section}]\n"
-            content = doc.page_content
+            content = _sanitize_context_text(doc.page_content)
             chunk_text = chunk_header + content
             if current_chars + len(chunk_text) > max_chars:
                 remaining_chars = max_chars - current_chars
