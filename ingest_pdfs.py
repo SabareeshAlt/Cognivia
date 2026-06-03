@@ -23,6 +23,23 @@ import pickle
 import re
 import sys
 import time
+
+if sys.platform == 'win32':
+    _old_rename = os.rename
+    def _safe_rename(src, dst):
+        for _ in range(5):
+            try:
+                if os.path.exists(dst):
+                    try:
+                        os.remove(dst)
+                    except Exception:
+                        pass
+                os.replace(src, dst)
+                return
+            except (FileExistsError, PermissionError):
+                time.sleep(0.1)
+        os.replace(src, dst)
+    os.rename = _safe_rename
 from collections import Counter, defaultdict
 from typing import List
 
@@ -37,6 +54,7 @@ load_dotenv()
 
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from database.embedding import get_embeddings
 from langchain_ollama import OllamaEmbeddings
 from pymilvus import MilvusClient, CollectionSchema, DataType, FieldSchema
 
@@ -51,7 +69,7 @@ EMBEDDING_MODEL  = os.environ.get("EMBEDDING_MODEL", "mxbai-embed-large")
 OLLAMA_BASE_URL  = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 CHUNK_SIZE       = int(os.environ.get("CHUNK_SIZE", 1000))
 CHUNK_OVERLAP    = int(os.environ.get("CHUNK_OVERLAP", 200))
-INGEST_BATCH     = int(os.environ.get("ACADEMERAG_INGEST_BATCH_SIZE", 16))
+INGEST_BATCH     = int(os.environ.get("ACADEMERAG_INGEST_BATCH_SIZE", 256))
 LOCAL_MILVUS_PATH = os.path.join(PROJECT_ROOT, "milvus_local.db")
 BM25_INDEX_FILE  = os.path.join(PROJECT_ROOT, "bm25_index.pkl")
 
@@ -81,16 +99,19 @@ def _file_sha256(path: str) -> str:
 
 def _get_pdf_files() -> list[dict]:
     items = []
-    for filename in sorted(os.listdir(DOCUMENTS_DIR)):
-        if not filename.lower().endswith(".pdf"):
-            continue
-        path = os.path.join(DOCUMENTS_DIR, filename)
-        items.append({
-            "path": path,
-            "source": filename,
-            "relative_path": os.path.relpath(path, PROJECT_ROOT),
-            "content_hash": _file_sha256(path),
-        })
+    if os.path.exists(DOCUMENTS_DIR):
+        for root, dirs, files in os.walk(DOCUMENTS_DIR):
+            for filename in files:
+                if not filename.lower().endswith(".pdf"):
+                    continue
+                path = os.path.join(root, filename)
+                items.append({
+                    "path": path,
+                    "source": filename,
+                    "relative_path": os.path.relpath(path, PROJECT_ROOT),
+                    "content_hash": _file_sha256(path),
+                })
+    items.sort(key=lambda x: x["path"])
     logger.info("Found %d PDF(s) in documents/: %s", len(items), [i["source"] for i in items])
     return items
 
@@ -164,6 +185,14 @@ def _parse_and_chunk(item: dict) -> list[Document]:
                     "unit_title":    current_unit_title,
                     "section_type":  current_section,
                     "chunk_index":   chunk_index,
+                    "file_name":     item["source"],
+                    "relative_path": item["relative_path"],
+                    "absolute_path": os.path.abspath(item["path"]),
+                    "chunk_id":      f"{item['source']}_{chunk_index}",
+                    "document_id":   item["content_hash"],
+                    "file_hash":     item["content_hash"],
+                    "ingestion_timestamp": int(time.time()),
+                    "source_type":   "pdf",
                 },
             ))
             chunk_index += 1
@@ -209,11 +238,24 @@ def _parse_and_chunk(item: dict) -> list[Document]:
 
 # ─── Milvus Insertion ─────────────────────────────────────────────────────────
 
-def _ensure_local_collection(client: MilvusClient, dim: int) -> None:
+def _ensure_local_collection(client: MilvusClient, dim: int) -> MilvusClient:
     if client.has_collection(COLLECTION_NAME):
         logger.info("Local Milvus: collection '%s' exists — dropping for fresh rebuild.", COLLECTION_NAME)
-        client.drop_collection(COLLECTION_NAME)
-        time.sleep(1)
+        try:
+            client.drop_collection(COLLECTION_NAME)
+        except Exception as e:
+            logger.warning("Local drop collection failed: %s. Retrying with manual directory cleanup.", e)
+            try:
+                client.close()
+            except Exception:
+                pass
+            time.sleep(1.0)
+            coll_dir = os.path.join(LOCAL_MILVUS_PATH, "collections", COLLECTION_NAME)
+            if os.path.exists(coll_dir):
+                import shutil
+                shutil.rmtree(coll_dir, ignore_errors=True)
+            client = MilvusClient(uri=LOCAL_MILVUS_PATH, timeout=30)
+            time.sleep(1.0)
 
     fields = [
         FieldSchema(name="pk",          dtype=DataType.INT64,         is_primary=True, auto_id=True),
@@ -236,6 +278,65 @@ def _ensure_local_collection(client: MilvusClient, dim: int) -> None:
         index_params=idx_params,
     )
     logger.info("Local Milvus: collection '%s' created (dim=%d, COSINE).", COLLECTION_NAME, dim)
+    return client
+
+
+def _ensure_cloud_collection(client: MilvusClient, dim: int) -> None:
+    if client.has_collection(COLLECTION_NAME):
+        logger.info("Zilliz Cloud: collection '%s' exists — dropping for fresh rebuild.", COLLECTION_NAME)
+        client.drop_collection(COLLECTION_NAME)
+        for _ in range(60):
+            if not client.has_collection(COLLECTION_NAME):
+                break
+            time.sleep(0.5)
+        logger.info("Zilliz Cloud: collection dropped.")
+
+    fields = [
+        FieldSchema(name="pk",          dtype=DataType.INT64,         is_primary=True, auto_id=True),
+        FieldSchema(name="source",       dtype=DataType.VARCHAR,       max_length=1024),
+        FieldSchema(name="page_number",  dtype=DataType.INT64),
+        FieldSchema(name="chunk_index",  dtype=DataType.INT64),
+        FieldSchema(name="text",         dtype=DataType.VARCHAR,       max_length=65535),
+        FieldSchema(name="vector",       dtype=DataType.FLOAT_VECTOR,  dim=dim),
+    ]
+    schema = CollectionSchema(
+        fields=fields,
+        description="AcademeRAG document chunks",
+        enable_dynamic_field=True,
+    )
+    idx_params = MilvusClient.prepare_index_params()
+    idx_params.add_index(field_name="vector", index_type="AUTOINDEX", metric_type="COSINE")
+    client.create_collection(
+        collection_name=COLLECTION_NAME,
+        schema=schema,
+        index_params=idx_params,
+    )
+    
+    for _ in range(60):
+        if client.has_collection(COLLECTION_NAME):
+            break
+        time.sleep(0.5)
+        
+    logger.info("Zilliz Cloud: collection '%s' created. Adding scalar inverted indexes...", COLLECTION_NAME)
+    for field, name in [
+        ("source", "source_idx"),
+        ("page_number", "page_number_idx"),
+        ("chunk_index", "chunk_index_idx"),
+    ]:
+        try:
+            scalar_index_params = MilvusClient.prepare_index_params()
+            scalar_index_params.add_index(
+                field_name=field,
+                index_name=name,
+                index_type="INVERTED",
+            )
+            client.create_index(
+                collection_name=COLLECTION_NAME,
+                index_params=scalar_index_params,
+            )
+            logger.info("  Scalar index created: %s (%s)", name, field)
+        except Exception as e:
+            logger.warning("  Scalar index '%s' skipped: %s", name, e)
 
 
 def _batch_insert(client: MilvusClient, embeddings: OllamaEmbeddings, docs: list[Document], label: str) -> int:
@@ -244,8 +345,33 @@ def _batch_insert(client: MilvusClient, embeddings: OllamaEmbeddings, docs: list
     start = time.monotonic()
     for offset in range(0, total, INGEST_BATCH):
         batch = docs[offset: offset + INGEST_BATCH]
-        texts   = [d.page_content for d in batch]
-        vectors = embeddings.embed_documents(texts)
+        
+        if batch[0].metadata and "_cached_vector" in batch[0].metadata:
+            vectors = [d.metadata["_cached_vector"] for d in batch]
+        else:
+            texts   = [d.page_content for d in batch]
+            vectors = embeddings.embed_documents(texts)
+            for d, vec in zip(batch, vectors):
+                if d.metadata is None:
+                    d.metadata = {}
+                d.metadata["_cached_vector"] = vec
+            try:
+                EMBEDDINGS_CACHE_FILE = os.path.join(PROJECT_ROOT, "embeddings_cache.pkl")
+                cache = {}
+                if os.path.exists(EMBEDDINGS_CACHE_FILE):
+                    try:
+                        with open(EMBEDDINGS_CACHE_FILE, "rb") as f:
+                            cache = pickle.load(f)
+                    except Exception:
+                        pass
+                for d, vec in zip(batch, vectors):
+                    text_hash = hashlib.sha256(d.page_content.encode("utf-8")).hexdigest()
+                    cache[text_hash] = vec
+                with open(EMBEDDINGS_CACHE_FILE, "wb") as f:
+                    pickle.dump(cache, f)
+            except Exception as ce:
+                logger.warning("Failed to write to embeddings cache: %s", ce)
+
         if len(vectors) != len(batch):
             raise RuntimeError(f"Embedding count mismatch: {len(vectors)} vs {len(batch)}")
 
@@ -260,7 +386,7 @@ def _batch_insert(client: MilvusClient, embeddings: OllamaEmbeddings, docs: list
                 "chunk_index": int(meta.get("chunk_index") or 0),
             }
             for k, v in meta.items():
-                if k not in row:
+                if k not in row and k != "_cached_vector":
                     row[k] = v
             payload.append(row)
 
@@ -340,7 +466,7 @@ def main() -> int:
 
     # ── Embeddings ────────────────────────────────────────────────────────────
     logger.info("Initializing Ollama embeddings (%s) ...", EMBEDDING_MODEL)
-    embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL, base_url=OLLAMA_BASE_URL)
+    embeddings = get_embeddings()
     probe = embeddings.embed_query("dimension probe")
     actual_dim = len(probe)
     logger.info("Embedding dimension confirmed: %d", actual_dim)
@@ -363,13 +489,32 @@ def main() -> int:
     for src, cnt in per_source.items():
         logger.info("  %s: %d chunks", src, cnt)
 
+    # ── Load Embeddings Cache ─────────────────────────────────────────────────
+    EMBEDDINGS_CACHE_FILE = os.path.join(PROJECT_ROOT, "embeddings_cache.pkl")
+    cached_count = 0
+    if os.path.exists(EMBEDDINGS_CACHE_FILE):
+        try:
+            with open(EMBEDDINGS_CACHE_FILE, "rb") as f:
+                cache = pickle.load(f)
+            for doc in all_docs:
+                text_hash = hashlib.sha256(doc.page_content.encode("utf-8")).hexdigest()
+                if text_hash in cache:
+                    if doc.metadata is None:
+                        doc.metadata = {}
+                    doc.metadata["_cached_vector"] = cache[text_hash]
+                    cached_count += 1
+            logger.info("Loaded %d / %d embeddings from cache file %s", cached_count, len(all_docs), EMBEDDINGS_CACHE_FILE)
+        except Exception as e:
+            logger.warning("Failed to load embeddings cache: %s", e)
+
     # ── Connect Milvus clients ────────────────────────────────────────────────
     logger.info("Connecting to Zilliz Cloud ...")
     zilliz_client = MilvusClient(uri=ZILLIZ_URI, token=ZILLIZ_TOKEN, timeout=30)
+    _ensure_cloud_collection(zilliz_client, VECTOR_DIM)
 
     logger.info("Connecting to Local Milvus Lite (%s) ...", LOCAL_MILVUS_PATH)
     local_client = MilvusClient(uri=LOCAL_MILVUS_PATH, timeout=30)
-    _ensure_local_collection(local_client, VECTOR_DIM)
+    local_client = _ensure_local_collection(local_client, VECTOR_DIM)
 
     # ── Insert into Zilliz Cloud ──────────────────────────────────────────────
     logger.info("Inserting %d chunks into Zilliz Cloud ...", len(all_docs))
@@ -387,6 +532,17 @@ def main() -> int:
     logger.info("Building and saving BM25 index ...")
     signature = tuple((item["relative_path"], item["content_hash"]) for item in pdf_files)
     _save_bm25(all_docs, signature)
+
+    # ── Update SQLite tracking ────────────────────────────────────────────────
+    try:
+        import django
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "rag_project.settings")
+        django.setup()
+        from database.ingestion import _save_tracking_rows
+        _save_tracking_rows(pdf_files)
+        logger.info("Updated Django IndexedDocument tracking rows.")
+    except Exception as e:
+        logger.warning("Could not update Django tracking rows: %s", e)
 
     # ── Verify counts ─────────────────────────────────────────────────────────
     logger.info("Verifying Zilliz Cloud row count ...")

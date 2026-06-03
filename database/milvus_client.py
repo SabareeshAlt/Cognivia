@@ -9,9 +9,27 @@ MilvusClient monkeypatch runs before any ORM-style Collection is used.
 import concurrent.futures
 import logging
 import os
+import sys
 import threading
 import time
 from typing import Optional
+
+if sys.platform == 'win32':
+    _old_rename = os.rename
+    def _safe_rename(src, dst):
+        for _ in range(5):
+            try:
+                if os.path.exists(dst):
+                    try:
+                        os.remove(dst)
+                    except Exception:
+                        pass
+                os.replace(src, dst)
+                return
+            except (FileExistsError, PermissionError):
+                time.sleep(0.1)
+        os.replace(src, dst)
+    os.rename = _safe_rename
 
 from langchain_core.documents import Document
 from langchain_milvus import Milvus
@@ -351,8 +369,29 @@ def ensure_collection_schema(cfg: dict, embeddings, recreate: bool = False) -> b
 
     if exists and recreate:
         logger.info("Dropping existing Milvus collection: %s", cfg["collection"])
-        client.drop_collection(cfg["collection"])
-        _wait_for_collection_absence(client, cfg["collection"])
+        try:
+            client.drop_collection(cfg["collection"])
+        except Exception as e:
+            uri = cfg.get("uri", "")
+            is_local = not (uri.startswith("http://") or uri.startswith("https://") or uri.startswith("tcp://"))
+            if is_local:
+                logger.warning("Local drop collection failed: %s. Retrying with manual directory cleanup.", e)
+                try:
+                    client.close()
+                except Exception:
+                    pass
+                time.sleep(1.0)
+                coll_dir = os.path.join(uri, "collections", cfg["collection"])
+                if os.path.exists(coll_dir):
+                    import shutil
+                    shutil.rmtree(coll_dir, ignore_errors=True)
+                client = _connect_milvus_client(cfg)
+            else:
+                raise e
+        try:
+            _wait_for_collection_absence(client, cfg["collection"])
+        except Exception:
+            pass
         exists = False
 
     if exists:
@@ -435,7 +474,7 @@ def _search_milvus_with_config(
         "anns_field": "vector",
         "search_params": {"metric_type": "COSINE", "params": {"ef": 64}},
         "limit": k,
-        "output_fields": ["text", "source", "document_path", "document_hash", "page_number", "chunk_index"],
+        "output_fields": ["text", "source", "document_path", "document_hash", "page_number", "chunk_index", "file_name", "relative_path", "absolute_path", "chunk_id", "document_id", "file_hash", "ingestion_timestamp", "source_type"],
         "timeout": timeout_sec,
     }
     if source_expr:

@@ -42,28 +42,25 @@ logger = logging.getLogger(__name__)
 
 def get_pdf_files() -> list[str]:
     """Return absolute paths of all PDFs: documents/ folder only (canonical source)."""
-    pdf_files: list[str] = []
+    docs_files: list[str] = []
+    root_files: list[str] = []
     if os.path.exists(DOCUMENTS_DIR):
-        for filename in sorted(os.listdir(DOCUMENTS_DIR)):
-            if filename.lower().endswith(".pdf"):
-                pdf_files.append(os.path.join(DOCUMENTS_DIR, filename))
+        for root, dirs, files in os.walk(DOCUMENTS_DIR):
+            for filename in files:
+                if filename.lower().endswith(".pdf"):
+                    docs_files.append(os.path.join(root, filename))
     # Also scan project root for legacy copies; prefer documents/ version on name collision.
     for filename in ["RAG sample 1.pdf", "RAG sample 2.pdf", "RAG sample 3.pdf"]:
         root_path = os.path.join(PROJECT_ROOT, filename)
         if os.path.exists(root_path):
-            pdf_files.append(root_path)
-    by_name: dict[str, str] = {}
-    docs_dir_prefix = os.path.normcase(os.path.abspath(DOCUMENTS_DIR) + os.sep)
-    for path in pdf_files:
-        name = os.path.basename(path).lower()
-        existing = by_name.get(name)
-        if existing is None:
-            by_name[name] = path
-            continue
-        normalized = os.path.normcase(os.path.abspath(path))
-        if normalized.startswith(docs_dir_prefix):
-            by_name[name] = path
-    return sorted(by_name.values())
+            root_files.append(root_path)
+    
+    doc_basenames = {os.path.basename(p).lower() for p in docs_files}
+    pdf_files = list(docs_files)
+    for p in root_files:
+        if os.path.basename(p).lower() not in doc_basenames:
+            pdf_files.append(p)
+    return sorted(pdf_files)
 
 
 # ---------------------------------------------------------------------------

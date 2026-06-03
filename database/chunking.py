@@ -124,6 +124,14 @@ def _load_and_chunk_files(file_metadata: list[dict]) -> list[Document]:
                         "unit_title": current_unit_title,
                         "section_type": current_section_type,
                         "chunk_index": chunk_index,
+                        "file_name": item["source"],
+                        "relative_path": item["relative_path"],
+                        "absolute_path": os.path.abspath(path),
+                        "chunk_id": f"{item['source']}_{chunk_index}",
+                        "document_id": item["content_hash"],
+                        "file_hash": item["content_hash"],
+                        "ingestion_timestamp": int(time.time()),
+                        "source_type": "pdf",
                     }
                 ))
                 chunk_index += 1
