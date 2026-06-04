@@ -1,6 +1,6 @@
 """
 test_generation.py
-Validates the AcademeRAG Answer Generation pipeline using gemma3:12b.
+Validates the AcademeRAG Answer Generation pipeline using gemma4:latest.
 """
 import os
 import sys
@@ -41,8 +41,8 @@ def run_generation_test():
     context_text = _format_context(docs)
     logger.info("Formatted context length: %d chars", len(context_text))
 
-    # 3. Setup LLM (gemma3:12b)
-    llm_model = os.environ.get("ACADEMERAG_LLM_MODEL", "gemma3:12b")
+    # 3. Setup LLM (gemma4:latest)
+    llm_model = os.environ.get("ACADEMERAG_LLM_MODEL", "gemma4:latest")
     ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
     logger.info("Initializing LLM: %s at %s", llm_model, ollama_url)
     

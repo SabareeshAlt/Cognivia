@@ -100,7 +100,7 @@ BM25_B = 0.75
 
 COLLECTION_NAME = _env_str("COLLECTION_NAME", "academerag")
 EMBEDDING_MODEL = _env_str("EMBEDDING_MODEL", "bge-m3:latest")
-LLM_MODEL = _env_str("ACADEMERAG_LLM_MODEL", "gemma3:12b")
+LLM_MODEL = _env_str("ACADEMERAG_LLM_MODEL", "gemma4:latest")
 OLLAMA_BASE_URL = _env_str("OLLAMA_BASE_URL", "http://ollama:11434")
 LLM_TEMPERATURE = _env_float("ACADEMERAG_LLM_TEMPERATURE", 0.1)
 LLM_PROVIDER = "ollama"

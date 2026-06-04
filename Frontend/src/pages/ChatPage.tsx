@@ -267,6 +267,7 @@ const ChatPage = () => {
   const navigate = useNavigate();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [canStop, setCanStop] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [deleteChatId, setDeleteChatId] = useState<string | null>(null);
@@ -370,6 +371,7 @@ const ChatPage = () => {
       streamReaderRef.current = null;
     }
     setIsLoading(false);
+    setCanStop(false);
   };
 
   const handleSend = async (e?: React.FormEvent) => {
@@ -384,6 +386,7 @@ const ChatPage = () => {
     const currentInput = sanitizeText(input);
     setInput("");
     setIsLoading(true);
+    setCanStop(true);
     const streamToken = ++streamTokenRef.current;
 
     appendMessage(activeChatId, { id: Date.now().toString(), role: "user", content: currentInput });
@@ -424,6 +427,8 @@ const ChatPage = () => {
               if (parsed.type === "token") {
                 botText += parsed.content;
                 updateMessage(activeChatId, botMsgId, sanitizeText(botText));
+              } else if (parsed.type === "text_done") {
+                setCanStop(false);
               } else if (parsed.type === "score") {
                 logTelemetry("chat.rag_score_received", {
                   score: parsed.score,
@@ -451,6 +456,8 @@ const ChatPage = () => {
             if (parsed.type === "token") {
               botText += parsed.content;
               updateMessage(activeChatId, botMsgId, sanitizeText(botText));
+            } else if (parsed.type === "text_done") {
+              setCanStop(false);
             } else if (parsed.type === "score") {
               logTelemetry("chat.rag_score_received", {
                 score: parsed.score,
@@ -503,6 +510,7 @@ const ChatPage = () => {
         streamAbortRef.current = null;
         streamReaderRef.current = null;
         setIsLoading(false);
+        setCanStop(false);
       }
     }
   };
@@ -713,7 +721,7 @@ const ChatPage = () => {
                 className="flex-1 resize-none overflow-y-auto overflow-x-hidden bg-transparent px-6 py-4 text-base text-foreground placeholder:text-muted-foreground outline-none"
                 aria-label="Ask a question"
               />
-              {isLoading && (
+              {canStop && (
                 <button
                   type="button"
                   onClick={() => {

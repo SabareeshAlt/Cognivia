@@ -3,7 +3,7 @@ rag/llm_orchestration.py
 ------------------------
 Intelligent LLM router:
   Online  → Groq  (llama-3.3-70b-versatile)   [primary]
-  Offline → Ollama (gemma3:12b or configured)  [fallback]
+  Offline → Ollama (gemma4:latest or configured)  [fallback]
 
 Failover triggers on: timeout, 401, 429, DNS failure, any network error.
 Streaming and non-streaming both use the same routing logic.
@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "").strip()
 GROQ_MODEL: str = os.getenv("GROQ_LLM_MODEL", "llama-3.3-70b-versatile")
 # Offline model — defaults to the configured Ollama model (usually llama3.1:latest).
-# Set OLLAMA_OFFLINE_MODEL=gemma3:12b in .env on the machine where gemma3:12b is pulled.
+# Set OLLAMA_OFFLINE_MODEL=gemma4:latest in .env on the machine where gemma4:latest is pulled.
 OLLAMA_OFFLINE_MODEL: str = os.getenv("OLLAMA_OFFLINE_MODEL", LLM_MODEL)
 
 # Internet check — cached for 30 s to avoid per-request DNS overhead
@@ -558,6 +558,7 @@ def stream_optimized_response(question: str):
         if not docs:
             logger.warning("RETRIEVAL_EMPTY | query='%s'", question)
             yield f'data: {json.dumps({"type": "token", "content": "I couldn\'t find relevant content in the knowledge base."})}\n\n'
+            yield f'data: {json.dumps({"type": "text_done", "content": ""})}\n\n'
             # Yield zero score payload
             from rag.scoring import compute_pipeline_score
             score_payload = compute_pipeline_score(question, "I couldn't find relevant content in the knowledge base.", [])
@@ -591,6 +592,9 @@ def stream_optimized_response(question: str):
                 first_token_emitted = True
             full_answer += chunk
             yield f'data: {json.dumps({"type": "token", "content": chunk})}\n\n'
+
+        # Signal that text generation is complete to hide the termination button immediately
+        yield f'data: {json.dumps({"type": "text_done", "content": ""})}\n\n'
 
         # Compute RAG pipeline score
         from rag.scoring import compute_pipeline_score
