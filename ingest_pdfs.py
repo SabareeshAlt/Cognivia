@@ -346,15 +346,26 @@ def _batch_insert(client: MilvusClient, embeddings: OllamaEmbeddings, docs: list
     for offset in range(0, total, INGEST_BATCH):
         batch = docs[offset: offset + INGEST_BATCH]
         
-        if batch[0].metadata and "_cached_vector" in batch[0].metadata:
-            vectors = [d.metadata["_cached_vector"] for d in batch]
-        else:
-            texts   = [d.page_content for d in batch]
-            vectors = embeddings.embed_documents(texts)
-            for d, vec in zip(batch, vectors):
-                if d.metadata is None:
-                    d.metadata = {}
-                d.metadata["_cached_vector"] = vec
+        # Collect which vectors are cached and which need embedding
+        vectors = []
+        to_embed_indices = []
+        to_embed_texts = []
+        for i, d in enumerate(batch):
+            if d.metadata and "_cached_vector" in d.metadata:
+                vectors.append(d.metadata["_cached_vector"])
+            else:
+                vectors.append(None)
+                to_embed_indices.append(i)
+                to_embed_texts.append(d.page_content)
+                
+        if to_embed_texts:
+            embedded = embeddings.embed_documents(to_embed_texts)
+            for idx, vec in zip(to_embed_indices, embedded):
+                vectors[idx] = vec
+                if batch[idx].metadata is None:
+                    batch[idx].metadata = {}
+                batch[idx].metadata["_cached_vector"] = vec
+                
             try:
                 EMBEDDINGS_CACHE_FILE = os.path.join(PROJECT_ROOT, "embeddings_cache.pkl")
                 cache = {}
@@ -364,13 +375,14 @@ def _batch_insert(client: MilvusClient, embeddings: OllamaEmbeddings, docs: list
                             cache = pickle.load(f)
                     except Exception:
                         pass
-                for d, vec in zip(batch, vectors):
-                    text_hash = hashlib.sha256(d.page_content.encode("utf-8")).hexdigest()
-                    cache[text_hash] = vec
+                for idx in to_embed_indices:
+                    text_hash = hashlib.sha256(batch[idx].page_content.encode("utf-8")).hexdigest()
+                    cache[text_hash] = vectors[idx]
                 with open(EMBEDDINGS_CACHE_FILE, "wb") as f:
                     pickle.dump(cache, f)
             except Exception as ce:
                 logger.warning("Failed to write to embeddings cache: %s", ce)
+
 
         if len(vectors) != len(batch):
             raise RuntimeError(f"Embedding count mismatch: {len(vectors)} vs {len(batch)}")

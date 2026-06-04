@@ -1,0 +1,1064 @@
+{
+  "1": [
+    {
+      "description": "Percent uncertainty",
+      "formula": "Percent uncertainty = (δ A)/(A) × 100 %"
+    }
+  ],
+  "2": [
+    {
+      "description": "Multiplication by a scalar (vector equation)",
+      "formula": "B → = α A →"
+    },
+    {
+      "description": "Multiplication by a scalar (scalar equation for magnitudes)",
+      "formula": "B = | α | A"
+    },
+    {
+      "description": "Resultant of two vectors",
+      "formula": "D →_A D = D →_A C + D →_C D"
+    },
+    {
+      "description": "Commutative law",
+      "formula": "A → + B → = B → + A →"
+    },
+    {
+      "description": "Associative law",
+      "formula": "( A → + B →)+ C → = A → +(B → + C → )"
+    },
+    {
+      "description": "Distributive law",
+      "formula": "α_1 A → + α_2 A → =(α_1 + α_2)A →"
+    },
+    {
+      "description": "The component form of a vector in two dimensions",
+      "formula": "A → = A_x i ^ + A_y j ^"
+    },
+    {
+      "description": "Scalar components of a vector in two dimensions",
+      "formula": "{ A_x = x_e - x_b A_y = y_e - y_b"
+    },
+    {
+      "description": "Magnitude of a vector in a plane",
+      "formula": "A = sqrt(A x 2 + A y 2)"
+    },
+    {
+      "description": "The direction angle of a vector in a plane",
+      "formula": "θ_A = tan^−1((A_y)/(A_x) )"
+    },
+    {
+      "description": "Scalar components of a vector in a plane",
+      "formula": "{ A_x = A cos θ_A A_y = A sin θ_A"
+    },
+    {
+      "description": "Polar coordinates in a plane",
+      "formula": "{ x = r cos φ y = r sin φ"
+    },
+    {
+      "description": "The component form of a vector in three dimensions",
+      "formula": "A → = A_x i ^ + A_y j ^ + A_z k ^"
+    },
+    {
+      "description": "The scalar z -component of a vector in three dimensions",
+      "formula": "A_z = z_e - z_b"
+    },
+    {
+      "description": "Magnitude of a vector in three dimensions",
+      "formula": "A = sqrt(A x 2 + A y 2 + A z 2)"
+    },
+    {
+      "description": "Distributive property",
+      "formula": "α(A → + B →)= α A → + α B →"
+    },
+    {
+      "description": "Antiparallel vector to A → A →",
+      "formula": "− A → = − A_x i ^ - A_y j ^ - A_z k ^"
+    },
+    {
+      "description": "Equal vectors",
+      "formula": "A → = B → ⇔ { A_x = B_x A_y = B_y A_z = B_z"
+    },
+    {
+      "description": "Components of the resultant of N vectors",
+      "formula": "{ F_R x = ∑ k = 1 N F_k x = F_1 x + F_2 x + … + F_N x F_R y = ∑ k = 1 N F_k y = F_1 y + F_2 y + … + F_N y F_R z = ∑ k = 1 N F_k z = F_1 z + F_2 z + … + F_N z"
+    },
+    {
+      "description": "General unit vector",
+      "formula": "V ^ = (V →)/(V)"
+    },
+    {
+      "description": "Definition of the scalar product",
+      "formula": "A → · B → = A B cos φ"
+    },
+    {
+      "description": "Commutative property of the scalar product",
+      "formula": "A → · B → = B → · A →"
+    },
+    {
+      "description": "Distributive property of the scalar product",
+      "formula": "A → ·(B → + C →)= A → · B → + A → · C →"
+    },
+    {
+      "description": "Scalar product in terms of scalar components of vectors",
+      "formula": "A → · B → = A_x B_x + A_y B_y + A_z B_z"
+    },
+    {
+      "description": "Cosine of the angle between two vectors",
+      "formula": "cos φ = (A → · B →)/(A B)"
+    },
+    {
+      "description": "Dot products of unit vectors",
+      "formula": "i ^ · j ^ = j ^ · k ^ = k ^ · i ^ = 0"
+    },
+    {
+      "description": "Magnitude of the vector product (definition)",
+      "formula": "| A → × B → | = A B sin φ"
+    },
+    {
+      "description": "Anticommutative property of the vector product",
+      "formula": "A → × B → = − B → × A →"
+    },
+    {
+      "description": "Distributive property of the vector product",
+      "formula": "A → ×(B → + C →)= A → × B → + A → × C →"
+    },
+    {
+      "description": "Cross products of unit vectors",
+      "formula": "{ i ^ × j ^ = + k ^ , j ^ × k ^ = + i ^ , k ^ × i ^ = + j ^ ."
+    },
+    {
+      "description": "The cross product in terms of scalar components of vectors",
+      "formula": "A → × B → =(A_y B_z - A_z B_y)i ^ +(A_z B_x - A_x B_z)j ^ +(A_x B_y - A_y B_x)k ^"
+    }
+  ],
+  "3": [
+    {
+      "description": "Displacement",
+      "formula": "Δ x = x_f - x_i"
+    },
+    {
+      "description": "Total displacement",
+      "formula": "Δ x_Total = ∑ Δ x_i"
+    },
+    {
+      "description": "Average velocity",
+      "formula": "v – = (Δ x)/(Δ t) = (x_2 - x_1)/(t_2 - t_1)"
+    },
+    {
+      "description": "Instantaneous velocity",
+      "formula": "v(t)= (d x(t ))/(d t)"
+    },
+    {
+      "description": "Average speed",
+      "formula": "Average speed = s – = (Total distance)/(Elapsed time)"
+    },
+    {
+      "description": "Instantaneous speed",
+      "formula": "Instantaneous speed = | v(t)|"
+    },
+    {
+      "description": "Average acceleration",
+      "formula": "a – = (Δ v)/(Δ t) = (v_f - v_0)/(t_f - t_0)"
+    },
+    {
+      "description": "Instantaneous acceleration",
+      "formula": "a(t)= (d v(t ))/(d t)"
+    },
+    {
+      "description": "Position from average velocity",
+      "formula": "x = x_0 + v – t"
+    },
+    {
+      "description": "Average velocity (for constant acceleration)",
+      "formula": "v – = (v_0 + v)/(2)"
+    },
+    {
+      "description": "Velocity from acceleration",
+      "formula": "v = v_0 + a t(constant a )"
+    },
+    {
+      "description": "Position from velocity and acceleration",
+      "formula": "x = x_0 + v_0 t + 1/2 a t^2(constant a )"
+    },
+    {
+      "description": "Velocity from distance",
+      "formula": "v^2 = v 0 2 + 2 a(x - x_0 )(constant a )"
+    },
+    {
+      "description": "Velocity of free fall",
+      "formula": "v = v_0 - g t (positive upward)"
+    },
+    {
+      "description": "Height of free fall",
+      "formula": "y = y_0 + v_0 t - 1/2 g t^2"
+    },
+    {
+      "description": "Velocity of free fall from height",
+      "formula": "v^2 = v 0 2 - 2 g(y - y_0 )"
+    },
+    {
+      "description": "Velocity from acceleration",
+      "formula": "v(t)= ∫ a(t)d t + C_1"
+    },
+    {
+      "description": "Position from velocity",
+      "formula": "x(t)= ∫ v(t)d t + C_2"
+    }
+  ],
+  "4": [
+    {
+      "description": "Position vector",
+      "formula": "r →(t)= x(t)i ^ + y(t)j ^ + z(t)k ^"
+    },
+    {
+      "description": "Displacement vector",
+      "formula": "Δ r → = r →(t_2)- r →(t_1 )"
+    },
+    {
+      "description": "Velocity vector",
+      "formula": "v →(t)= lim Δ t → 0 (r →(t + Δ t)- r →(t ))/(Δ t) = (d r →)/(d t)"
+    },
+    {
+      "description": "Velocity in terms of components",
+      "formula": "v →(t)= v_x(t)i ^ + v_y(t)j ^ + v_z(t)k ^"
+    },
+    {
+      "description": "Velocity components",
+      "formula": "v_x(t)= (d x(t ))/(d t) v_y(t)= (d y(t ))/(d t) v_z(t)= (d z(t ))/(d t)"
+    },
+    {
+      "description": "Average velocity",
+      "formula": "v →_avg = (r →(t_2)- r →(t_1 ))/(t_2 - t_1)"
+    },
+    {
+      "description": "Instantaneous acceleration",
+      "formula": "a →(t)= lim t → 0 (v →(t + Δ t)- v →(t ))/(Δ t) = (d v →(t ))/(d t)"
+    },
+    {
+      "description": "Instantaneous acceleration, component form",
+      "formula": "a →(t)= (d v_x(t ))/(d t) i ^ + (d v_y(t ))/(d t) j ^ + (d v_z(t ))/(d t) k ^"
+    },
+    {
+      "description": "Instantaneous acceleration as second derivatives of position",
+      "formula": "a →(t)= (d^2 x(t ))/(d t^2) i ^ + (d^2 y(t ))/(d t^2) j ^ + (d^2 z(t ))/(d t^2) k ^"
+    },
+    {
+      "description": "Time of flight",
+      "formula": "T_tof = (2(v_0 sin θ_0 ))/(g)"
+    },
+    {
+      "description": "Trajectory",
+      "formula": "y =(tan θ_0)x -[(g)/(2(v_0 cos θ_0 )^2)]x^2"
+    },
+    {
+      "description": "Range",
+      "formula": "R = (v 0 2 sin 2 θ_0)/(g)"
+    },
+    {
+      "description": "Centripetal acceleration",
+      "formula": "a_C = (v^2)/(r)"
+    },
+    {
+      "description": "Position vector, uniform circular motion",
+      "formula": "r →(t)= A cos ω t i ^ + A sin ω t j ^"
+    },
+    {
+      "description": "Velocity vector, uniform circular motion",
+      "formula": "v →(t)= (d r →(t ))/(d t) = − A ω sin ω t i ^ + A ω cos ω t j ^"
+    },
+    {
+      "description": "Acceleration vector, uniform circular motion",
+      "formula": "a →(t)= (d v →(t ))/(d t) = − A ω^2 cos ω t i ^ - A ω^2 sin ω t j ^"
+    },
+    {
+      "description": "Tangential acceleration",
+      "formula": "a_T = (d | v → |)/(d t)"
+    },
+    {
+      "description": "Total acceleration",
+      "formula": "a → = a →_C + a →_T"
+    },
+    {
+      "description": "Position vector in frame S is the position vector in frame S ′ S ′ plus the vector from the origin of S to the origin of S ′ S ′",
+      "formula": "r →_P S = r →_P S^′ + r →_S^′ S"
+    },
+    {
+      "description": "Relative velocity equation connecting two reference frames",
+      "formula": "v →_P S = v →_P S^′ + v →_S^′ S"
+    },
+    {
+      "description": "Relative velocity equation connecting more than two reference frames",
+      "formula": "v →_P C = v →_P A + v →_A B + v →_B C"
+    },
+    {
+      "description": "Relative acceleration equation",
+      "formula": "a →_P S = a →_P S^′ + a →_S^′ S"
+    }
+  ],
+  "5": [
+    {
+      "description": "Net external force",
+      "formula": "F →_net = ∑ F → = F →_1 + F →_2 + ⋯"
+    },
+    {
+      "description": "Newton’s first law",
+      "formula": "v → = constant when F →_net = 0 → N"
+    },
+    {
+      "description": "Newton’s second law, vector form",
+      "formula": "F →_net = ∑ F → = m a →"
+    },
+    {
+      "description": "Newton’s second law, scalar form",
+      "formula": "F_net = m a"
+    },
+    {
+      "description": "Newton’s second law, component form",
+      "formula": "∑ F →_x = m a →_x , ∑ F →_y = m a →_y , and ∑ F →_z = m a →_z ."
+    },
+    {
+      "description": "Newton’s second law, momentum form",
+      "formula": "F →_net = (d p →)/(d t)"
+    },
+    {
+      "description": "Definition of weight, vector form",
+      "formula": "w → = m g →"
+    },
+    {
+      "description": "Definition of weight, scalar form",
+      "formula": "w = m g"
+    },
+    {
+      "description": "Newton’s third law",
+      "formula": "F →_AB = − F →_BA"
+    },
+    {
+      "description": "Normal force on an object resting on a horizontal surface, vector form",
+      "formula": "N → = − m g →"
+    },
+    {
+      "description": "Normal force on an object resting on a horizontal surface, scalar form",
+      "formula": "N = m g"
+    },
+    {
+      "description": "Normal force on an object resting on an inclined plane, scalar form",
+      "formula": "N = m g cos θ"
+    },
+    {
+      "description": "Restoring force by a spring displaced by x from the relaxed position",
+      "formula": "F → = − k x → ."
+    },
+    {
+      "description": "Tension in a cable supporting an object of mass m at rest, scalar form",
+      "formula": "T = w = m g"
+    }
+  ],
+  "6": [
+    {
+      "description": "Magnitude of static friction",
+      "formula": "f_s ≤ μ_s N"
+    },
+    {
+      "description": "Magnitude of kinetic friction",
+      "formula": "f_k = μ_k N"
+    },
+    {
+      "description": "Centripetal force",
+      "formula": "F_c = m (v^2)/(r) or F_c = m r ω^2"
+    },
+    {
+      "description": "Ideal angle of a banked curve",
+      "formula": "tan θ = (v^2)/(r g)"
+    },
+    {
+      "description": "Drag force",
+      "formula": "F_D = 1/2 C ρ A v^2"
+    },
+    {
+      "description": "Stokes’ law",
+      "formula": "F_s = 6 π r η v"
+    }
+  ],
+  "7": [
+    {
+      "description": "Work done by a force over an infinitesimal displacement",
+      "formula": "d W = F → · d r → = | F → | | d r → | cos θ"
+    },
+    {
+      "description": "Work done by a force acting along a path from A to B",
+      "formula": "W_A B = ∫ path A B F → · d r →"
+    },
+    {
+      "description": "Work done by a constant force of kinetic friction",
+      "formula": "W_fr = − f_k | l_A B |"
+    },
+    {
+      "description": "Work done going from A to B by Earth’s gravity, near its surface",
+      "formula": "W_grav, A B = − m g(y_B - y_A )"
+    },
+    {
+      "description": "Work done going from A to B by one-dimensional spring force",
+      "formula": "W_spring, A B = −(1/2 k )(x B 2 - x A 2 )"
+    },
+    {
+      "description": "Kinetic energy of a non-relativistic particle",
+      "formula": "K = 1/2 m v^2 = (p^2)/(2 m)"
+    },
+    {
+      "description": "Work-energy theorem",
+      "formula": "W_net = K_B - K_A"
+    },
+    {
+      "description": "Power as rate of doing work",
+      "formula": "P = (d W)/(d t)"
+    },
+    {
+      "description": "Power as the dot product of force and velocity",
+      "formula": "P = F → · v →"
+    }
+  ],
+  "8": [
+    {
+      "description": "Difference of potential energy",
+      "formula": "Δ U_A B = U_B - U_A = − W_A B"
+    },
+    {
+      "description": "Potential energy with respect to zero of potential energy at r → 0 r → 0",
+      "formula": "Δ U = U(r →)- U(r →_0 )"
+    },
+    {
+      "description": "Gravitational potential energy near Earth’s surface",
+      "formula": "U(y)= m g y + const ."
+    },
+    {
+      "description": "Potential energy for an ideal spring",
+      "formula": "U(x)= 1/2 k x^2 + const ."
+    },
+    {
+      "description": "Work done by conservative force over a closed path",
+      "formula": "W_closed path = ∫ F →_cons · d r → = 0"
+    },
+    {
+      "description": "Condition for conservative force in two dimensions",
+      "formula": "( (d F_x)/(d y))=((d F_y)/(d x) )"
+    },
+    {
+      "description": "Conservative force is the negative derivative of potential energy",
+      "formula": "F_l = - (d U)/(d l)"
+    },
+    {
+      "description": "Conservation of energy with no non-conservative forces",
+      "formula": "0 = W_n c , A B = Δ(K + U )_A B = Δ E_A B ."
+    }
+  ],
+  "9": [
+    {
+      "description": "Definition of momentum",
+      "formula": "p → = m v →"
+    },
+    {
+      "description": "Impulse",
+      "formula": "J → ≡ ∫ t_i t_f F →(t)d t or J → = F →_ave Δ t"
+    },
+    {
+      "description": "Impulse-momentum theorem",
+      "formula": "J → = Δ p →"
+    },
+    {
+      "description": "Average force from momentum",
+      "formula": "F → = (Δ p →)/(Δ t)"
+    },
+    {
+      "description": "Instantaneous force from momentum (Newton’s second law)",
+      "formula": "F →(t)= (d p →)/(d t)"
+    },
+    {
+      "description": "Conservation of momentum",
+      "formula": "(d p →_1)/(d t) + (d p →_2)/(d t) = 0 or p →_1 + p →_2 = constant"
+    },
+    {
+      "description": "Generalized conservation of momentum",
+      "formula": "∑ j = 1 N p →_j = constant"
+    },
+    {
+      "description": "Conservation of momentum in two dimensions",
+      "formula": "p_f , x = p_1,i , x + p_2,i , x p_f , y = p_1,i , y + p_2,i , y"
+    },
+    {
+      "description": "External forces",
+      "formula": "F →_ext = ∑ j = 1 N (d p →_j)/(d t)"
+    },
+    {
+      "description": "Newton’s second law for an extended object",
+      "formula": "F → = (d p →_CM)/(d t)"
+    },
+    {
+      "description": "Acceleration of the center of mass",
+      "formula": "a →_CM = (d^2)/(d t^2)((1)/(M) ∑ j = 1 N m_j r →_j)= (1)/(M) ∑ j = 1 N m_j a →_j"
+    },
+    {
+      "description": "Position of the center of mass for a system of particles",
+      "formula": "r →_CM ≡ (1)/(M) ∑ j = 1 N m_j r →_j"
+    },
+    {
+      "description": "Velocity of the center of mass",
+      "formula": "v →_CM = (d)/(d t)((1)/(M) ∑ j = 1 N m_j r →_j)= (1)/(M) ∑ j = 1 N m_j v →_j"
+    },
+    {
+      "description": "Position of the center of mass of a continuous object",
+      "formula": "r →_CM ≡ (1)/(M) ∫ r → d m"
+    },
+    {
+      "description": "Rocket equation",
+      "formula": "Δ v = u ln((m_i)/(m) )"
+    }
+  ],
+  "10": [
+    {
+      "description": "Angular position",
+      "formula": "θ = (s)/(r)"
+    },
+    {
+      "description": "Angular velocity",
+      "formula": "ω = lim Δ t → 0 (Δ θ)/(Δ t) = (d θ)/(d t)"
+    },
+    {
+      "description": "Tangential speed",
+      "formula": "v_t = r ω"
+    },
+    {
+      "description": "Angular acceleration",
+      "formula": "α = lim Δ t → 0 (Δ ω)/(Δ t) = (d ω)/(d t) = (d^2 θ)/(d t^2)"
+    },
+    {
+      "description": "Tangential acceleration",
+      "formula": "a_t = r α"
+    },
+    {
+      "description": "Average angular velocity",
+      "formula": "ω – = (ω_0 + ω_f)/(2)"
+    },
+    {
+      "description": "Angular displacement",
+      "formula": "θ_f = θ_0 + ω – t"
+    },
+    {
+      "description": "Angular velocity from constant angular acceleration",
+      "formula": "ω_f = ω_0 + α t"
+    },
+    {
+      "description": "Angular velocity from displacement and constant angular acceleration",
+      "formula": "θ_f = θ_0 + ω_0 t + 1/2 α t^2"
+    },
+    {
+      "description": "Change in angular velocity",
+      "formula": "ω f 2 = ω 0 2 + 2 α(Δ θ )"
+    },
+    {
+      "description": "Total acceleration",
+      "formula": "a → = a →_c + a →_t"
+    },
+    {
+      "description": "Rotational kinetic energy",
+      "formula": "K = 1/2(∑ j m_j r j 2)ω^2"
+    },
+    {
+      "description": "Moment of inertia",
+      "formula": "I = ∑ j m_j r j 2"
+    },
+    {
+      "description": "Rotational kinetic energy in terms of the moment of inertia of a rigid body",
+      "formula": "K = 1/2 I ω^2"
+    },
+    {
+      "description": "Moment of inertia of a continuous object",
+      "formula": "I = ∫ r^2 d m"
+    },
+    {
+      "description": "Parallel-axis theorem",
+      "formula": "I_parallel-axis = I_center of mass + m d^2"
+    },
+    {
+      "description": "Moment of inertia of a compound object",
+      "formula": "I_total = ∑ i I_i"
+    },
+    {
+      "description": "Torque vector",
+      "formula": "τ → = r → × F →"
+    },
+    {
+      "description": "Magnitude of torque",
+      "formula": "| τ → | = r_⊥ F"
+    },
+    {
+      "description": "Total torque",
+      "formula": "τ →_net = ∑ i | τ →_i |"
+    },
+    {
+      "description": "Newton’s second law for rotation",
+      "formula": "∑ i τ_i = I α"
+    },
+    {
+      "description": "Incremental work done by a torque",
+      "formula": "d W =(∑ i τ_i)d θ"
+    },
+    {
+      "description": "Work-energy theorem",
+      "formula": "W_A B = K_B - K_A"
+    },
+    {
+      "description": "Rotational work done by net force",
+      "formula": "W_A B = ∫ θ_A θ_B(∑ i τ_i)d θ"
+    },
+    {
+      "description": "Rotational power",
+      "formula": "P = τ ω"
+    }
+  ],
+  "11": [
+    {
+      "description": "Velocity of center of mass of rolling object",
+      "formula": "v_CM = R ω"
+    },
+    {
+      "description": "Acceleration of center of mass of rolling object",
+      "formula": "a_CM = R α"
+    },
+    {
+      "description": "Displacement of center of mass of rolling object",
+      "formula": "d_CM = R θ"
+    },
+    {
+      "description": "Acceleration of an object rolling without slipping",
+      "formula": "a_CM = (m g sin θ)/(m +(I_CM / r^2 ))"
+    },
+    {
+      "description": "Angular momentum",
+      "formula": "l → = r → × p →"
+    },
+    {
+      "description": "Derivative of angular momentum equals torque",
+      "formula": "(d l →)/(d t) = ∑ τ →"
+    },
+    {
+      "description": "Angular momentum of a system of particles",
+      "formula": "L → = l →_1 + l →_2 + ⋯ + l →_N"
+    },
+    {
+      "description": "For a system of particles, derivative of angular momentum equals torque",
+      "formula": "(d L →)/(d t) = ∑ τ →"
+    },
+    {
+      "description": "Angular momentum of a rotating rigid body",
+      "formula": "L = I ω"
+    },
+    {
+      "description": "Conservation of angular momentum",
+      "formula": "(d L →)/(d t) = 0"
+    },
+    {
+      "description": "Conservation of angular momentum",
+      "formula": "L → = l →_1 + l →_2 + ⋯ + l →_N = constant"
+    },
+    {
+      "description": "Precessional angular velocity",
+      "formula": "ω_P = (r M g)/(I ω)"
+    }
+  ],
+  "12": [
+    {
+      "description": "First Equilibrium Condition",
+      "formula": "∑ k F →_k = 0 →"
+    },
+    {
+      "description": "Second Equilibrium Condition",
+      "formula": "∑ k τ →_k = 0 →"
+    },
+    {
+      "description": "Linear relation between stress and strain",
+      "formula": "stress = (elastic modulus) × strain"
+    },
+    {
+      "description": "Young’s modulus",
+      "formula": "Y = (tensile stress)/(tensile strain) = (F_⊥)/(A) (L_0)/(Δ L)"
+    },
+    {
+      "description": "Bulk modulus",
+      "formula": "B = (bulk stress)/(bulk strain) = − Δ p (V_0)/(Δ V)"
+    },
+    {
+      "description": "Shear modulus",
+      "formula": "S = (shear stress)/(shear strain) = (F_∥)/(A) (L_0)/(Δ x)"
+    }
+  ],
+  "13": [
+    {
+      "description": "Newton’s law of gravitation",
+      "formula": "F →_12 = G (m_1 m_2)/(r^2) r ^_12"
+    },
+    {
+      "description": "Acceleration due to gravity at the surface of Earth",
+      "formula": "g = G (M_E)/(r 2)"
+    },
+    {
+      "description": "Gravitational potential energy beyond Earth",
+      "formula": "U = - (G M_E m)/(r)"
+    },
+    {
+      "description": "Conservation of energy",
+      "formula": "1/2 m v 1 2 - (G M m)/(r_1) = 1/2 m v 2 2 - (G M m)/(r_2)"
+    },
+    {
+      "description": "Escape velocity",
+      "formula": "v_esc = sqrt((2 G M)/(R))"
+    },
+    {
+      "description": "Orbital speed",
+      "formula": "v_orbit = sqrt((GM_E)/(r))"
+    },
+    {
+      "description": "Orbital period",
+      "formula": "Τ = 2 π sqrt((r^3)/(GM_E))"
+    },
+    {
+      "description": "Energy in circular orbit",
+      "formula": "E = K + U = - (G m M_E)/(2 r)"
+    },
+    {
+      "description": "Conic sections",
+      "formula": "(α)/(r) = 1 + e cos θ"
+    },
+    {
+      "description": "Kepler’s third law",
+      "formula": "Τ^2 = (4 π^2)/(G M) a^3"
+    },
+    {
+      "description": "Schwarzschild radius",
+      "formula": "R_S = (2 G M)/(c^2)"
+    }
+  ],
+  "14": [
+    {
+      "description": "Density of a sample at constant density",
+      "formula": "ρ = (m)/(V)"
+    },
+    {
+      "description": "Pressure",
+      "formula": "p = (F)/(A)"
+    },
+    {
+      "description": "Pressure at a depth h in a fluid of constant density",
+      "formula": "p = p_0 + ρ g h"
+    },
+    {
+      "description": "Change of pressure with height in a constant-density fluid",
+      "formula": "(d p)/(d y) = − ρ g"
+    },
+    {
+      "description": "Absolute pressure",
+      "formula": "p_abs = p_g + p_atm"
+    },
+    {
+      "description": "Pascal’s principle",
+      "formula": "(F_1)/(A_1) = (F_2)/(A_2)"
+    },
+    {
+      "description": "Volume flow rate",
+      "formula": "Q = (d V)/(d t)"
+    },
+    {
+      "description": "Continuity equation (constant density)",
+      "formula": "A_1 v_1 = A_2 v_2"
+    },
+    {
+      "description": "Continuity equation (general form)",
+      "formula": "ρ_1 A_1 v_1 = ρ_2 A_2 v_2"
+    },
+    {
+      "description": "Bernoulli’s equation",
+      "formula": "p + 1/2 ρ v^2 + ρ g y = constant"
+    },
+    {
+      "description": "Viscosity",
+      "formula": "η = (F L)/(v A)"
+    },
+    {
+      "description": "Poiseuille’s law for resistance",
+      "formula": "R = (8 η l)/(π r^4)"
+    },
+    {
+      "description": "Poiseuille’s law",
+      "formula": "Q = (( p_2 - p_1)π r^4)/(8 η l)"
+    }
+  ],
+  "15": [
+    {
+      "description": "Relationship between frequency and period",
+      "formula": "f = (1)/(T)"
+    },
+    {
+      "description": "Position in SHM with ϕ = 0.00 Position in SHM with ϕ = 0.00",
+      "formula": "x(t)= A cos(ω t )"
+    },
+    {
+      "description": "General position in SHM",
+      "formula": "x(t)= A cos(ω t + ϕ )"
+    },
+    {
+      "description": "General velocity in SHM",
+      "formula": "v(t)= − A ω sin(ω t + ϕ )"
+    },
+    {
+      "description": "General acceleration in SHM",
+      "formula": "a(t)= − A ω^2 cos(ω t + ϕ )"
+    },
+    {
+      "description": "Maximum displacement (amplitude) of SHM",
+      "formula": "x_max = A"
+    },
+    {
+      "description": "Maximum velocity of SHM",
+      "formula": "| v_max | = A ω"
+    },
+    {
+      "description": "Maximum acceleration of SHM",
+      "formula": "| a_max | = A ω^2"
+    },
+    {
+      "description": "Angular frequency of a mass-spring system in SHM",
+      "formula": "ω = sqrt((k)/(m))"
+    },
+    {
+      "description": "Period of a mass-spring system in SHM",
+      "formula": "T = 2 π sqrt((m)/(k))"
+    },
+    {
+      "description": "Frequency of a mass-spring system in SHM",
+      "formula": "f = (1)/(2 π) sqrt((k)/(m))"
+    },
+    {
+      "description": "Energy in a mass-spring system in SHM",
+      "formula": "E_Total = 1/2 k x^2 + 1/2 m v^2 = 1/2 k A^2"
+    },
+    {
+      "description": "The velocity of the mass in a spring-mass system in SHM",
+      "formula": "v = ± sqrt((k)/(m)(A^2 - x^2 ))"
+    },
+    {
+      "description": "The x -component of the radius of a rotating disk",
+      "formula": "x(t)= A cos(ω t + ϕ )"
+    },
+    {
+      "description": "The x -component of the velocity of the edge of a rotating disk",
+      "formula": "v(t)= − v_max sin(ω t + ϕ )"
+    },
+    {
+      "description": "The x -component of the acceleration of the edge of a rotating disk",
+      "formula": "a(t)= − a_max cos(ω t + ϕ )"
+    },
+    {
+      "description": "Force equation for a simple pendulum",
+      "formula": "(d^2 θ)/(d t^2) = - (g)/(L) θ"
+    },
+    {
+      "description": "Angular frequency for a simple pendulum",
+      "formula": "ω = sqrt((g)/(L))"
+    },
+    {
+      "description": "Period of a simple pendulum",
+      "formula": "T = 2 π sqrt((L)/(g))"
+    },
+    {
+      "description": "Angular frequency of a physical pendulum",
+      "formula": "ω = sqrt((m g L)/(I))"
+    },
+    {
+      "description": "Period of a physical pendulum",
+      "formula": "T = 2 π sqrt((I)/(m g L))"
+    },
+    {
+      "description": "Period of a torsional pendulum",
+      "formula": "T = 2 π sqrt((I)/(κ))"
+    },
+    {
+      "description": "Newton’s second law for harmonic motion",
+      "formula": "m (d^2 x)/(d t^2) + b (d x)/(d t) + k x = 0"
+    },
+    {
+      "description": "Solution for underdamped harmonic motion",
+      "formula": "x(t)= A_0 e^- (b)/(2 m) t cos(ω t + ϕ )"
+    },
+    {
+      "description": "Natural angular frequency of a mass-spring system",
+      "formula": "ω_0 = sqrt((k)/(m))"
+    },
+    {
+      "description": "Angular frequency of underdamped harmonic motion",
+      "formula": "ω = sqrt(ω 0 2 -((b)/(2 m) )^2)"
+    },
+    {
+      "description": "Newton’s second law for forced, damped oscillation",
+      "formula": "− k x - b (d x)/(d t) + F_o sin(ω t)= m (d^2 x)/(d t^2)"
+    },
+    {
+      "description": "Solution to Newton’s second law for forced, damped oscillations",
+      "formula": "x(t)= A cos(ω t + ϕ )"
+    },
+    {
+      "description": "Amplitude of system undergoing forced, damped oscillations",
+      "formula": "A = (F_o)/(sqrt(m^2(ω^2 - ω o 2 )^2 + b^2 ω^2))"
+    }
+  ],
+  "16": [
+    {
+      "description": "Wave speed",
+      "formula": "v = (λ)/(T) = λ f"
+    },
+    {
+      "description": "Linear mass density",
+      "formula": "μ = (mass of the string)/(length of the string)"
+    },
+    {
+      "description": "Speed of a wave or pulse on a string under tension",
+      "formula": "| v | = sqrt((F_T)/(μ))"
+    },
+    {
+      "description": "Speed of a compression wave in a fluid",
+      "formula": "v = sqrt((Β)/(ρ))"
+    },
+    {
+      "description": "Resultant wave from superposition of two sinusoidal waves that are identical except for a phase shift",
+      "formula": "y_R(x , t)=[2 A cos((ϕ)/(2))] sin(k x - ω t + (ϕ)/(2) )"
+    },
+    {
+      "description": "Wave number",
+      "formula": "k ≡ (2 π)/(λ)"
+    },
+    {
+      "description": "Wave speed",
+      "formula": "v = (ω)/(k)"
+    },
+    {
+      "description": "A periodic wave",
+      "formula": "y(x , t)= A sin(k x ∓ ω t + ϕ )"
+    },
+    {
+      "description": "Phase of a wave",
+      "formula": "k x ∓ ω t + ϕ"
+    },
+    {
+      "description": "The linear wave equation",
+      "formula": "(∂^2 y(x , t ))/(∂ x^2) = (1)/(v w 2) (∂^2 y(x , t ))/(∂ t^2)"
+    },
+    {
+      "description": "Power averaged over a wavelength",
+      "formula": "P_ave = (E_λ)/(T) = 1/2 μ A^2 ω^2 (λ)/(T) = 1/2 μ A^2 ω^2 v"
+    },
+    {
+      "description": "Intensity",
+      "formula": "I = (P)/(A)"
+    },
+    {
+      "description": "Intensity for a spherical wave",
+      "formula": "I = (P)/(4 π r^2)"
+    },
+    {
+      "description": "Equation of a standing wave",
+      "formula": "y(x , t)=[2 A sin(k x)] cos(ω t )"
+    },
+    {
+      "description": "Wavelength for symmetric boundary conditions",
+      "formula": "λ_n = (2)/(n) L , n = 1 , 2 , 3 , 4 , 5 ..."
+    },
+    {
+      "description": "Frequency for symmetric boundary conditions",
+      "formula": "f_n = n (v)/(2 L) = n f_1 , n = 1 , 2 , 3 , 4 , 5 ..."
+    }
+  ],
+  "17": [
+    {
+      "description": "Pressure of a sound wave",
+      "formula": "Δ P = Δ P_max sin(k x ∓ ω t + ϕ )"
+    },
+    {
+      "description": "Displacement of the oscillating molecules of a sound wave",
+      "formula": "s(x , t)= s_max cos(k x ∓ ω t + ϕ )"
+    },
+    {
+      "description": "Velocity of a wave",
+      "formula": "v = f λ"
+    },
+    {
+      "description": "Speed of sound in a fluid",
+      "formula": "v = sqrt((B)/(ρ))"
+    },
+    {
+      "description": "Speed of sound in a solid",
+      "formula": "v = sqrt((Y)/(ρ))"
+    },
+    {
+      "description": "Speed of sound in an ideal gas",
+      "formula": "v = sqrt((γ R T)/(M))"
+    },
+    {
+      "description": "Speed of sound in air as a function of temperature",
+      "formula": "v = 331 (m)/(s) sqrt((T_K)/(273 K)) = 331 (m)/(s) sqrt(1 + (T_C)/(273 ° C))"
+    },
+    {
+      "description": "Decrease in intensity as a spherical wave expands",
+      "formula": "I_2 = I_1((r_1)/(r_2) )^2"
+    },
+    {
+      "description": "Intensity averaged over a period",
+      "formula": "I = (〈 P 〉)/(A)"
+    },
+    {
+      "description": "Intensity of sound",
+      "formula": "I = (( Δ p_max )^2)/(2 ρ v)"
+    },
+    {
+      "description": "Sound intensity level",
+      "formula": "β(d B)= 10 log_10((I)/(I_0) )"
+    },
+    {
+      "description": "Resonant wavelengths of a tube closed at one end",
+      "formula": "λ_n = (4)/(n) L , n = 1 , 3 , 5 ,…"
+    },
+    {
+      "description": "Resonant frequencies of a tube closed at one end",
+      "formula": "f_n = n (v)/(4 L) , n = 1 , 3 , 5 ,…"
+    },
+    {
+      "description": "Resonant wavelengths of a tube open at both ends",
+      "formula": "λ_n = (2)/(n) L , n = 1 , 2 , 3 ,…"
+    },
+    {
+      "description": "Resonant frequencies of a tube open at both ends",
+      "formula": "f_n = n (v)/(2 L) , n = 1 , 2 , 3 ,…"
+    },
+    {
+      "description": "Beat frequency produced by two waves that differ in frequency",
+      "formula": "f_beat = | f_2 - f_1 |"
+    },
+    {
+      "description": "Observed frequency for a stationary observer and a moving source",
+      "formula": "f_o = f_s((v)/(v ∓ v_s) )"
+    },
+    {
+      "description": "Observed frequency for a moving observer and a stationary source",
+      "formula": "f_o = f_s((v ± v_o)/(v) )"
+    },
+    {
+      "description": "Doppler shift for the observed frequency",
+      "formula": "f_o = f_s((v ± v_o)/(v ∓ v_s) )"
+    },
+    {
+      "description": "Mach number",
+      "formula": "M = (v_s)/(v)"
+    },
+    {
+      "description": "Sine of angle formed by shock wave",
+      "formula": "sin θ = (v)/(v_s) = (1)/(M)"
+    }
+  ]
+}

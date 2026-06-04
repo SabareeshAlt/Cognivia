@@ -206,6 +206,28 @@ def _ingest_documents_in_batches(vector_store: Milvus, docs: list[Document]) -> 
 
 def _ingest_documents_with_client(cfg: dict, embeddings, docs: list[Document]) -> None:
     import time
+    import pickle
+    import hashlib
+
+
+    # Try loading cached embeddings
+    EMBEDDINGS_CACHE_FILE = os.path.join(PROJECT_ROOT, "embeddings_cache.pkl")
+    cached_count = 0
+    if os.path.exists(EMBEDDINGS_CACHE_FILE):
+        try:
+            with open(EMBEDDINGS_CACHE_FILE, "rb") as f:
+                cache = pickle.load(f)
+            for doc in docs:
+                text_hash = hashlib.sha256(doc.page_content.encode("utf-8")).hexdigest()
+                if text_hash in cache:
+                    if doc.metadata is None:
+                        doc.metadata = {}
+                    doc.metadata["_cached_vector"] = cache[text_hash]
+                    cached_count += 1
+            logger.info("Loaded %d / %d embeddings from cache file %s", cached_count, len(docs), EMBEDDINGS_CACHE_FILE)
+        except Exception as e:
+            logger.warning("Failed to load embeddings cache: %s", e)
+
     client = _connect_milvus_client_with_timeout(cfg, timeout_seconds=MILVUS_INIT_TIMEOUT_SECONDS)
     total = len(docs)
     start = time.monotonic()
@@ -220,8 +242,43 @@ def _ingest_documents_with_client(cfg: dict, embeddings, docs: list[Document]) -
                 f"Ingestion timed out after {elapsed:.1f}s (limit {INGEST_MAX_SECONDS:.1f}s)"
             )
         batch = docs[offset: offset + INGEST_BATCH_SIZE]
-        batch_texts = [doc.page_content for doc in batch]
-        batch_vectors = embeddings.embed_documents(batch_texts)
+        
+        # Collect cached vectors and embed the missing ones
+        batch_vectors = []
+        to_embed_indices = []
+        to_embed_texts = []
+        for i, d in enumerate(batch):
+            if d.metadata and "_cached_vector" in d.metadata:
+                batch_vectors.append(d.metadata["_cached_vector"])
+            else:
+                batch_vectors.append(None)
+                to_embed_indices.append(i)
+                to_embed_texts.append(d.page_content)
+                
+        if to_embed_texts:
+            embedded = embeddings.embed_documents(to_embed_texts)
+            for idx, vec in zip(to_embed_indices, embedded):
+                batch_vectors[idx] = vec
+                if batch[idx].metadata is None:
+                    batch[idx].metadata = {}
+                batch[idx].metadata["_cached_vector"] = vec
+                
+            try:
+                cache = {}
+                if os.path.exists(EMBEDDINGS_CACHE_FILE):
+                    try:
+                        with open(EMBEDDINGS_CACHE_FILE, "rb") as f:
+                            cache = pickle.load(f)
+                    except Exception:
+                        pass
+                for idx in to_embed_indices:
+                    text_hash = hashlib.sha256(batch[idx].page_content.encode("utf-8")).hexdigest()
+                    cache[text_hash] = batch_vectors[idx]
+                with open(EMBEDDINGS_CACHE_FILE, "wb") as f:
+                    pickle.dump(cache, f)
+            except Exception as ce:
+                logger.warning("Failed to write to embeddings cache: %s", ce)
+
         if len(batch_vectors) != len(batch):
             raise RuntimeError(
                 f"Embedding size mismatch: got {len(batch_vectors)} vectors for {len(batch)} chunks"
@@ -229,6 +286,7 @@ def _ingest_documents_with_client(cfg: dict, embeddings, docs: list[Document]) -
         payload = []
         for doc, vector in zip(batch, batch_vectors):
             meta = doc.metadata or {}
+
             row = {
                 "text": doc.page_content,
                 "vector": vector,
