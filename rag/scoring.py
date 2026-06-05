@@ -150,14 +150,9 @@ def calculate_citation_confidence_score(answer: str, docs: List[Document]) -> fl
     if not citations:
         return 50.0 # Penalty for claiming facts without references
         
-    try:
-        from database import _page_text_map
-        text_map = _page_text_map()
-    except Exception:
-        text_map = {}
-        
     last_idx = 0
     scores = []
+    text_map = None  # Loaded lazily if needed
     
     for match in citations:
         source = match.group(1).strip().lower()
@@ -208,6 +203,12 @@ def calculate_citation_confidence_score(answer: str, docs: List[Document]) -> fl
             
         # If not found in docs, try to find page text from _page_text_map
         if not page_text:
+            if text_map is None:
+                try:
+                    from database import _page_text_map
+                    text_map = _page_text_map()
+                except Exception:
+                    text_map = {}
             if page_num is not None:
                 for (rel_path, p_no), txt in text_map.items():
                     if p_no == page_num:

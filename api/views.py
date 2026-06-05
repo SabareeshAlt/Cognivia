@@ -304,8 +304,16 @@ def health_ready(request):
         "vector_store": False,
     }
 
-    provider = os.getenv("ACADEMERAG_LLM_PROVIDER", "ollama").strip().lower()
-    health_status["llm_provider"] = "ollama"
+    # Lazy-load RAG modules to determine active routing
+    groq_active = False
+    try:
+        _load_rag_modules()
+        from rag.llm_orchestration import _groq_usable
+        groq_active = _groq_usable()
+    except Exception as exc:
+        logger.debug("Failed to check Groq usability during health probe: %s", exc)
+
+    health_status["llm_provider"] = "groq" if groq_active else "ollama"
 
     try:
         import requests as http_requests
@@ -316,7 +324,11 @@ def health_ready(request):
     except Exception as exc:
         logger.debug("Ollama health probe failed: %s", exc)
 
-    health_status["llm"] = health_status["ollama"]
+    if groq_active:
+        # If Groq is active (configured and online), the primary LLM pipeline is healthy
+        health_status["llm"] = True
+    else:
+        health_status["llm"] = health_status["ollama"]
 
     elapsed = time.monotonic() - started
     if elapsed <= timeout_s:
