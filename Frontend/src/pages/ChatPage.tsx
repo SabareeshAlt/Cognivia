@@ -180,19 +180,16 @@ export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): s
       continue;
     }
 
-    if (line.startsWith("### ")) {
+    const headerMatch = line.match(/^(#{1,6})\s+(.*)$/);
+    if (headerMatch) {
       closeListIfOpen();
-      chunks.push(`<h3>${renderInlineMarkdown(line.slice(4), cleanAcademicNoise)}</h3>`);
-      continue;
-    }
-    if (line.startsWith("## ")) {
-      closeListIfOpen();
-      chunks.push(`<h2>${renderInlineMarkdown(line.slice(3), cleanAcademicNoise)}</h2>`);
-      continue;
-    }
-    if (line.startsWith("# ")) {
-      closeListIfOpen();
-      chunks.push(`<h1>${renderInlineMarkdown(line.slice(2), cleanAcademicNoise)}</h1>`);
+      const level = headerMatch[1].length;
+      const text = headerMatch[2].trim();
+      if (level <= 3) {
+        chunks.push(`<h${level}>${renderInlineMarkdown(text, cleanAcademicNoise)}</h${level}>`);
+      } else {
+        chunks.push(`<p><strong>${renderInlineMarkdown(text, cleanAcademicNoise)}</strong></p>`);
+      }
       continue;
     }
 

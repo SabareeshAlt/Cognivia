@@ -60,5 +60,26 @@ describe("ChatPage markdown cleanup", () => {
     expect(html).not.toContain("RAG sample 2.pdf");
     expect(html).toContain("See detail and");
   });
+
+  it("correctly parses all heading levels from 1 to 6", () => {
+    const raw = [
+      "# Heading 1",
+      "## Heading 2",
+      "### Heading 3",
+      "#### Heading 4",
+      "##### Heading 5",
+      "###### Heading 6",
+    ].join("\n");
+
+    const html = markdownToSafeHtml(raw, false);
+
+    expect(html).toContain("<h1>Heading 1</h1>");
+    expect(html).toContain("<h2>Heading 2</h2>");
+    expect(html).toContain("<h3>Heading 3</h3>");
+    expect(html).toContain("<p><strong>Heading 4</strong></p>");
+    expect(html).toContain("<p><strong>Heading 5</strong></p>");
+    expect(html).toContain("<p><strong>Heading 6</strong></p>");
+    expect(html).not.toContain("#");
+  });
 });
 
