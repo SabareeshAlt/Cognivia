@@ -19,8 +19,16 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command:
-      "VITE_API_BASE_URL=http://127.0.0.1:8000 VITE_CHAT_DISABLED=false VITE_CANARY_PERCENT=100 VITE_API_TIMEOUT_MS=10000 VITE_MAX_JS_BUNDLE_KB=550 VITE_FEATURE_ENHANCED_STREAMING=true VITE_FEATURE_DIAGNOSTICS_PANEL=false npm run dev -- --host 127.0.0.1 --port 4173",
+    command: "npm run dev -- --host 127.0.0.1 --port 4173",
+    env: {
+      VITE_API_BASE_URL: "http://127.0.0.1:8000",
+      VITE_CHAT_DISABLED: "false",
+      VITE_CANARY_PERCENT: "100",
+      VITE_API_TIMEOUT_MS: "10000",
+      VITE_MAX_JS_BUNDLE_KB: "550",
+      VITE_FEATURE_ENHANCED_STREAMING: "true",
+      VITE_FEATURE_DIAGNOSTICS_PANEL: "false",
+    },
     port: 4173,
     timeout: 120000,
     reuseExistingServer: !process.env.CI,

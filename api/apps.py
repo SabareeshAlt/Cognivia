@@ -27,7 +27,7 @@ class ApiConfig(AppConfig):
             "runserver" in sys.argv and
             "--noreload" not in sys.argv
         )
-        if is_reloader_parent:
+        if is_reloader_parent or "test" in sys.argv:
             return
 
         # 1. ALWAYS initialize the BM25 index in a background thread to prevent cold starts

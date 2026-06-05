@@ -1,0 +1,10 @@
+{
+  "milvus_lite_participation": true,
+  "django_tracking_active": true,
+  "tracked_documents": 3,
+  "sqlite_hashes": {
+    "documents\\RAG sample 1.pdf": "93652b69c43197d10dc83438b813b5f7515e61e7ea4336da8636ff902cb4aba8",
+    "documents\\RAG sample 2.pdf": "b3129f44c4a26b534176bb0f83d85e1ed26a6cdf93ebebacb20104eab2d6bc00",
+    "documents\\RAG sample 3.pdf": "fd14128247d6eca558ff7da76c3f68aa4fb8e66e0fb2c949e873b3d2736e082a"
+  }
+}

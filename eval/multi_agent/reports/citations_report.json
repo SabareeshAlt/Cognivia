@@ -1,0 +1,91 @@
+{
+  "summary": {
+    "total_citations_analyzed": 8,
+    "valid_citations": 8,
+    "citation_accuracy": 1.0,
+    "total_cases": 5
+  },
+  "results": [
+    {
+      "id": "factual_1",
+      "question": "What are the subjects taught in the BE Computer Science and Engineering programme?",
+      "citations_found": 0,
+      "citations": []
+    },
+    {
+      "id": "syllabus_1",
+      "question": "What is the syllabus for the first unit of any subject in the provided documents?",
+      "citations_found": 0,
+      "citations": []
+    },
+    {
+      "id": "syllabus_2",
+      "question": "List the course objectives mentioned in the documents.",
+      "citations_found": 3,
+      "citations": [
+        {
+          "source": "RAG sample 1.pdf",
+          "page": "214",
+          "source_exists": true,
+          "is_valid": true
+        },
+        {
+          "source": "RAG sample 1.pdf",
+          "page": "214",
+          "source_exists": true,
+          "is_valid": true
+        },
+        {
+          "source": "RAG sample 1.pdf",
+          "page": "214",
+          "source_exists": true,
+          "is_valid": true
+        }
+      ]
+    },
+    {
+      "id": "syllabus_3",
+      "question": "What are the course outcomes listed in the provided documents?",
+      "citations_found": 4,
+      "citations": [
+        {
+          "source": "RAG sample 1.pdf",
+          "page": "14",
+          "source_exists": true,
+          "is_valid": true
+        },
+        {
+          "source": "RAG sample 1.pdf",
+          "page": "14",
+          "source_exists": true,
+          "is_valid": true
+        },
+        {
+          "source": "RAG sample 1.pdf",
+          "page": "15",
+          "source_exists": true,
+          "is_valid": true
+        },
+        {
+          "source": "RAG sample 1.pdf",
+          "page": "15",
+          "source_exists": true,
+          "is_valid": true
+        }
+      ]
+    },
+    {
+      "id": "syllabus_4",
+      "question": "How many units are there in the syllabus described in the documents?",
+      "citations_found": 1,
+      "citations": [
+        {
+          "source": "RAG sample 1.pdf",
+          "page": "17",
+          "source_exists": true,
+          "is_valid": true
+        }
+      ]
+    }
+  ]
+}

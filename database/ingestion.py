@@ -435,6 +435,11 @@ def initialize_vector_store(
     should_sync, reason = compute_sync_decision(file_metadata, tracked_hashes, force_reindex)
     should_sync = should_sync and auto_sync
 
+    import sys
+    if "test" in sys.argv:
+        should_sync = False
+        auto_sync = False
+
     # Divergence check: if Django thinks everything is synced, verify that Milvus actually has chunks
     if not should_sync and auto_sync:
         try:

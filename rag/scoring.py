@@ -190,42 +190,41 @@ def calculate_citation_confidence_score(answer: str, docs: List[Document]) -> fl
             scores.append(1.0)
             continue
             
-        # Try to find page text from _page_text_map
         page_text = ""
-        if page_num is not None:
-            for (rel_path, p_no), txt in text_map.items():
-                if p_no == page_num:
+        fallback_contents = []
+        for doc in docs:
+            doc_meta = doc.metadata or {}
+            doc_src = doc_meta.get("source", "").lower()
+            doc_page = doc_meta.get("page_number")
+            doc_basename = os.path.basename(doc_meta.get("document_path", "")).lower()
+            
+            src_match = (doc_src == source or doc_basename == source or doc_src.replace('.pdf', '') == source)
+            page_match = (page_num is None or doc_page == page_num)
+            
+            if src_match and page_match:
+                fallback_contents.append(doc.page_content)
+        if fallback_contents:
+            page_text = "\n".join(fallback_contents)
+            
+        # If not found in docs, try to find page text from _page_text_map
+        if not page_text:
+            if page_num is not None:
+                for (rel_path, p_no), txt in text_map.items():
+                    if p_no == page_num:
+                        basename = os.path.basename(rel_path).lower()
+                        if basename == source or rel_path.lower() == source or basename.replace('.pdf', '') == source:
+                            page_text = txt
+                            break
+            else:
+                # Join all pages of that file from text_map
+                all_pages_txt = []
+                for (rel_path, p_no), txt in text_map.items():
                     basename = os.path.basename(rel_path).lower()
                     if basename == source or rel_path.lower() == source or basename.replace('.pdf', '') == source:
-                        page_text = txt
-                        break
-        else:
-            # Join all pages of that file from text_map
-            all_pages_txt = []
-            for (rel_path, p_no), txt in text_map.items():
-                basename = os.path.basename(rel_path).lower()
-                if basename == source or rel_path.lower() == source or basename.replace('.pdf', '') == source:
-                    all_pages_txt.append(txt)
-            if all_pages_txt:
-                page_text = "\n".join(all_pages_txt)
-        
-        # If not found in page_text_map, fallback to docs matching the citation
-        if not page_text:
-            fallback_contents = []
-            for doc in docs:
-                doc_meta = doc.metadata or {}
-                doc_src = doc_meta.get("source", "").lower()
-                doc_page = doc_meta.get("page_number")
-                doc_basename = os.path.basename(doc_meta.get("document_path", "")).lower()
-                
-                src_match = (doc_src == source or doc_basename == source or doc_src.replace('.pdf', '') == source)
-                page_match = (page_num is None or doc_page == page_num)
-                
-                if src_match and page_match:
-                    fallback_contents.append(doc.page_content)
-            if fallback_contents:
-                page_text = "\n".join(fallback_contents)
-                
+                        all_pages_txt.append(txt)
+                if all_pages_txt:
+                    page_text = "\n".join(all_pages_txt)
+                    
         if page_text:
             page_tokens = set(_tokenize(page_text))
             overlap = context_tokens & page_tokens

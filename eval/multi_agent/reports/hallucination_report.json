@@ -1,0 +1,24 @@
+{
+  "summary": {
+    "hallucination_rate": 0.0,
+    "total_cases_evaluated": 3,
+    "hallucination_count": 0
+  },
+  "results": [
+    {
+      "id": "factual_1",
+      "question": "What are the subjects taught in the BE Computer Science and Engineering programme?",
+      "has_hallucination": false
+    },
+    {
+      "id": "syllabus_1",
+      "question": "What is the syllabus for the first unit of any subject in the provided documents?",
+      "has_hallucination": false
+    },
+    {
+      "id": "syllabus_2",
+      "question": "List the course objectives mentioned in the documents.",
+      "has_hallucination": false
+    }
+  ]
+}

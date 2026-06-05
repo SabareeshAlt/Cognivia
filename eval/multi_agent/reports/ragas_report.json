@@ -1,0 +1,31 @@
+{
+  "summary": {
+    "mean_faithfulness": 1.0,
+    "mean_answer_relevancy": 0.8,
+    "mean_context_precision": 0.0,
+    "total_cases": 3
+  },
+  "results": [
+    {
+      "id": "factual_1",
+      "question": "What are the subjects taught in the BE Computer Science and Engineering programme?",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.4,
+      "context_precision": 0.0
+    },
+    {
+      "id": "syllabus_1",
+      "question": "What is the syllabus for the first unit of any subject in the provided documents?",
+      "faithfulness": 1.0,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.0
+    },
+    {
+      "id": "syllabus_2",
+      "question": "List the course objectives mentioned in the documents.",
+      "faithfulness": 1.0,
+      "answer_relevancy": 1.0,
+      "context_precision": 0.0
+    }
+  ]
+}
