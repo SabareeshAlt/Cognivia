@@ -32,7 +32,7 @@ except ImportError:
 
 
 class LLMEvaluator:
-    def __init__(self, model="llama3.2", endpoint="http://localhost:11434/api/generate"):
+    def __init__(self, model="gemma4:12b", endpoint="http://localhost:11434/api/generate"):
         self.model = model
         self.endpoint = endpoint
 

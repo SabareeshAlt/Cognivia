@@ -58,15 +58,25 @@ _original_milvus_client_init = MilvusClient.__init__
 
 def _patched_milvus_client_init(self, *args, **kwargs):
     _original_milvus_client_init(self, *args, **kwargs)
-    connections._alias_handlers[self._using] = self._handler
-    connections._alias_config[self._using] = {"db_name": kwargs.get("db_name", "")}
+    
+    using = getattr(self, "_using", None)
+    handler = getattr(self, "_handler", None)
+    if using is not None and handler is not None:
+        connections._alias_handlers[using] = handler
+        connections._alias_config[using] = {"db_name": kwargs.get("db_name", "")}
     
     import types
     def instance_num_entities(collection_name=None, *args_inner, **kwargs_inner):
         if collection_name is None:
             from database.config import COLLECTION_NAME
             collection_name = COLLECTION_NAME
-        return self._handler.num_entities(collection_name, *args_inner, **kwargs_inner)
+        h = getattr(self, "_handler", None)
+        if h is not None:
+            return h.num_entities(collection_name, *args_inner, **kwargs_inner)
+        try:
+            return self._get_connection().num_entities(collection_name, *args_inner, **kwargs_inner)
+        except Exception:
+            return 0
         
     self.num_entities = types.MethodType(instance_num_entities, self)
 

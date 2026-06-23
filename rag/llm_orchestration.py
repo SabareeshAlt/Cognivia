@@ -218,6 +218,7 @@ def _create_llm_client(provider: str):
             temperature=LLM_TEMPERATURE,
             max_retries=1,
             request_timeout=60,
+            max_tokens=4096,
         )
 
     if provider == "ollama":
@@ -231,6 +232,8 @@ def _create_llm_client(provider: str):
             temperature=LLM_TEMPERATURE,
             keep_alive=-1,
             timeout=60.0,
+            num_predict=4096,
+            num_ctx=16384,
         )
 
     raise RuntimeError(f"Unknown LLM provider: {provider!r}")
