@@ -203,4 +203,5 @@ from database.retrieval import (
 # Startup: launch background Milvus cloud recovery monitor (daemon thread)
 # ---------------------------------------------------------------------------
 _start_cloud_recovery_monitor()
+_init_bm25_index_at_startup()
 

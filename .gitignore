@@ -3,6 +3,7 @@
 Frontend/.env
 Frontend/.env.*
 
+
 # macOS / editor / Python runtime artifacts
 .DS_Store
 .venv/

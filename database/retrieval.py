@@ -8,6 +8,7 @@ and the public _retrieve_docs entry point.
 
 import concurrent.futures
 import logging
+import os
 import re
 import time
 from typing import List, Optional, Set, Tuple, Union
@@ -70,10 +71,46 @@ def _rrf_fuse(
     sparse_docs: List[Union[Document, Tuple[Document, float]]],
     k: int,
 ) -> List[Document]:
-    """Combine dense and sparse results via Reciprocal Rank Fusion (rank constant = 60)."""
+    """Combine dense and sparse results using min-max normalization and weighted score fusion."""
 
     def extract_doc(item):
         return item[0] if isinstance(item, tuple) else item
+
+    # 1. Single-leg bypass
+    if not dense_docs and not sparse_docs:
+        return []
+    if not dense_docs:
+        logger.info("RRF_BYPASS | Dense leg is empty, returning sparse leg directly.")
+        return [extract_doc(d) for d in sparse_docs[:k]]
+    if not sparse_docs:
+        logger.info("RRF_BYPASS | Sparse leg is empty, returning dense leg directly.")
+        return [extract_doc(d) for d in dense_docs[:k]]
+
+    # 2. Extract documents and scores
+    dense_list = [extract_doc(d) for d in dense_docs]
+    sparse_list = [extract_doc(d) for d in sparse_docs]
+
+    dense_scores = [float(doc.metadata.get("score", 0.0)) for doc in dense_list]
+    sparse_scores = [float(doc.metadata.get("score", 0.0)) for doc in sparse_list]
+
+    # Min-max normalize dense
+    min_d, max_d = min(dense_scores), max(dense_scores)
+    range_d = max_d - min_d
+    if range_d > 0.0:
+        norm_dense = [(s - min_d) / range_d for s in dense_scores]
+    else:
+        norm_dense = [1.0] * len(dense_scores)
+
+    # Min-max normalize sparse
+    min_s, max_s = min(sparse_scores), max(sparse_scores)
+    range_s = max_s - min_s
+    if range_s > 0.0:
+        norm_sparse = [(s - min_s) / range_s for s in sparse_scores]
+    else:
+        norm_sparse = [1.0] * len(sparse_scores)
+
+    # w = ACADEMERAG_RRF_DENSE_WEIGHT (default = 0.6)
+    w = float(os.environ.get("ACADEMERAG_RRF_DENSE_WEIGHT", "0.6"))
 
     def doc_key(doc: Document) -> tuple:
         metadata = doc.metadata or {}
@@ -84,30 +121,30 @@ def _rrf_fuse(
             doc.page_content if metadata.get("chunk_index") is None else None,
         )
 
-    rrf_scores: dict = {}
+    fused_scores: dict = {}
     doc_map: dict = {}
 
-    for rank, item in enumerate(dense_docs):
-        doc = extract_doc(item)
+    # Accumulate weighted normalized score for dense docs
+    for doc, norm_score in zip(dense_list, norm_dense):
         key = doc_key(doc)
         if key not in doc_map:
             doc_map[key] = doc
-        rrf_scores[key] = rrf_scores.get(key, 0.0) + 1.0 / (60.0 + rank)
+        fused_scores[key] = fused_scores.get(key, 0.0) + w * norm_score
 
-    for rank, item in enumerate(sparse_docs):
-        doc = extract_doc(item)
+    # Accumulate weighted normalized score for sparse docs
+    for doc, norm_score in zip(sparse_list, norm_sparse):
         key = doc_key(doc)
         if key not in doc_map:
             doc_map[key] = doc
-        rrf_scores[key] = rrf_scores.get(key, 0.0) + 1.0 / (60.0 + rank)
+        fused_scores[key] = fused_scores.get(key, 0.0) + (1.0 - w) * norm_score
 
-    sorted_keys = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
+    sorted_keys = sorted(fused_scores.keys(), key=lambda x: fused_scores[x], reverse=True)
     fused_docs = []
     for key in sorted_keys[:k]:
         doc = doc_map[key]
         if doc.metadata is None:
             doc.metadata = {}
-        doc.metadata["rrf_score"] = rrf_scores[key]
+        doc.metadata["rrf_score"] = fused_scores[key]
         fused_docs.append(doc)
     return fused_docs
 

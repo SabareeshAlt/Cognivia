@@ -215,5 +215,383 @@
       "programming",
       "software"
     ]
+  },
+  {
+    "id": "gen_1",
+    "type": "Factual QA",
+    "question": "State Newton's first law of motion and explain the concept of inertia.",
+    "expected_sources": [
+      "RAG sample 1.pdf"
+    ],
+    "reference_keywords": [
+      "Newton",
+      "first law",
+      "inertia"
+    ]
+  },
+  {
+    "id": "gen_2",
+    "type": "Factual QA",
+    "question": "What is the vanishing gradient problem in deep neural networks?",
+    "expected_sources": [
+      "RAG sample 2.pdf"
+    ],
+    "reference_keywords": [
+      "vanishing gradient",
+      "backpropagation"
+    ]
+  },
+  {
+    "id": "gen_3",
+    "type": "Factual QA",
+    "question": "What is the purpose of Django middleware in the request-response cycle?",
+    "expected_sources": [
+      "RAG sample 3.pdf"
+    ],
+    "reference_keywords": [
+      "middleware",
+      "request",
+      "response"
+    ]
+  },
+  {
+    "id": "gen_4",
+    "type": "Keyword Lookup",
+    "question": "What does the term 'simple harmonic motion' refer to?",
+    "expected_sources": [
+      "RAG sample 1.pdf"
+    ],
+    "reference_keywords": [
+      "simple harmonic motion",
+      "SHM"
+    ]
+  },
+  {
+    "id": "gen_5",
+    "type": "Keyword Lookup",
+    "question": "Define the term 'dropout' as used in regularizing deep networks.",
+    "expected_sources": [
+      "RAG sample 2.pdf"
+    ],
+    "reference_keywords": [
+      "dropout",
+      "regularization",
+      "networks"
+    ]
+  },
+  {
+    "id": "gen_6",
+    "type": "Keyword Lookup",
+    "question": "What is the function of the csrf_token tag in Django templates?",
+    "expected_sources": [
+      "RAG sample 3.pdf"
+    ],
+    "reference_keywords": [
+      "csrf_token",
+      "CSRF"
+    ]
+  },
+  {
+    "id": "gen_7",
+    "type": "Summarization",
+    "question": "Summarize the differences between transverse and longitudinal waves.",
+    "expected_sources": [
+      "RAG sample 1.pdf"
+    ],
+    "reference_keywords": [
+      "transverse",
+      "longitudinal",
+      "waves"
+    ]
+  },
+  {
+    "id": "gen_8",
+    "type": "Summarization",
+    "question": "Summarize the core components of the Transformer encoder architecture.",
+    "expected_sources": [
+      "RAG sample 2.pdf"
+    ],
+    "reference_keywords": [
+      "Transformer",
+      "encoder",
+      "attention",
+      "layer normalization"
+    ]
+  },
+  {
+    "id": "gen_9",
+    "type": "Summarization",
+    "question": "Provide a summary of the Django MTV (Model-Template-View) design pattern.",
+    "expected_sources": [
+      "RAG sample 3.pdf"
+    ],
+    "reference_keywords": [
+      "MTV",
+      "model",
+      "template",
+      "view"
+    ]
+  },
+  {
+    "id": "gen_10",
+    "type": "Negative Retrieval",
+    "question": "How do you bake a classic French sourdough bread?",
+    "expected_sources": [],
+    "reference_keywords": [
+      "not found"
+    ]
+  },
+  {
+    "id": "gen_11",
+    "type": "Negative Retrieval",
+    "question": "Who was the prime minister of the United Kingdom in 1945?",
+    "expected_sources": [],
+    "reference_keywords": [
+      "not found"
+    ]
+  },
+  {
+    "id": "gen_12",
+    "type": "Negative Retrieval",
+    "question": "Describe the process of changing the oil in a car engine.",
+    "expected_sources": [],
+    "reference_keywords": [
+      "not found"
+    ]
+  },
+  {
+    "id": "gen_13",
+    "type": "Multi-page Reasoning",
+    "question": "How does the conservation of energy apply to a simple pendulum at its maximum displacement?",
+    "expected_sources": [
+      "RAG sample 1.pdf"
+    ],
+    "reference_keywords": [
+      "conservation of energy",
+      "pendulum",
+      "displacement"
+    ]
+  },
+  {
+    "id": "gen_14",
+    "type": "Multi-page Reasoning",
+    "question": "Compare the training complexity and parallelization capabilities of RNNs versus self-attention layers.",
+    "expected_sources": [
+      "RAG sample 2.pdf"
+    ],
+    "reference_keywords": [
+      "RNN",
+      "self-attention",
+      "parallelization"
+    ]
+  },
+  {
+    "id": "gen_15",
+    "type": "Multi-page Reasoning",
+    "question": "How does Django handle CSRF protection during a POST request submission from a template form?",
+    "expected_sources": [
+      "RAG sample 3.pdf"
+    ],
+    "reference_keywords": [
+      "CSRF",
+      "POST",
+      "request",
+      "protection"
+    ]
+  },
+  {
+    "id": "gen_16",
+    "type": "Table Extraction",
+    "question": "What are the standard SI base units for mass, length, and time?",
+    "expected_sources": [
+      "RAG sample 1.pdf"
+    ],
+    "reference_keywords": [
+      "SI base units",
+      "kilogram",
+      "meter",
+      "second"
+    ]
+  },
+  {
+    "id": "gen_17",
+    "type": "Table Extraction",
+    "question": "List the optimization algorithms covered in Chapter 12 of the deep learning book.",
+    "expected_sources": [
+      "RAG sample 2.pdf"
+    ],
+    "reference_keywords": [
+      "optimization",
+      "gradient descent",
+      "momentum",
+      "Adagrad"
+    ]
+  },
+  {
+    "id": "gen_18",
+    "type": "Table Extraction",
+    "question": "List the default middleware classes configured in a standard Django settings module.",
+    "expected_sources": [
+      "RAG sample 3.pdf"
+    ],
+    "reference_keywords": [
+      "MIDDLEWARE",
+      "SecurityMiddleware",
+      "SessionMiddleware"
+    ]
+  },
+  {
+    "id": "gen_19",
+    "type": "Semantic Retrieval",
+    "question": "Explain how the Doppler effect alters the perceived frequency of sound waves for a moving observer.",
+    "expected_sources": [
+      "RAG sample 1.pdf"
+    ],
+    "reference_keywords": [
+      "Doppler effect",
+      "perceived frequency",
+      "moving observer"
+    ]
+  },
+  {
+    "id": "gen_20",
+    "type": "Semantic Retrieval",
+    "question": "What is the difference between additive attention and scaled dot-product attention?",
+    "expected_sources": [
+      "RAG sample 2.pdf"
+    ],
+    "reference_keywords": [
+      "additive attention",
+      "scaled dot-product",
+      "attention"
+    ]
+  },
+  {
+    "id": "gen_21",
+    "type": "Semantic Retrieval",
+    "question": "Explain the concept of lazy evaluation in Django QuerySets.",
+    "expected_sources": [
+      "RAG sample 3.pdf"
+    ],
+    "reference_keywords": [
+      "lazy evaluation",
+      "QuerySet",
+      "database query"
+    ]
+  },
+  {
+    "id": "gen_22",
+    "type": "Syllabus QA",
+    "question": "What chapters are included under the Waves and Acoustics unit?",
+    "expected_sources": [
+      "RAG sample 1.pdf"
+    ],
+    "reference_keywords": [
+      "Waves and Acoustics",
+      "chapter"
+    ]
+  },
+  {
+    "id": "gen_23",
+    "type": "Syllabus QA",
+    "question": "What topics are discussed in Chapter 6 (Builders' Guide) of the deep learning book?",
+    "expected_sources": [
+      "RAG sample 2.pdf"
+    ],
+    "reference_keywords": [
+      "Builders' Guide",
+      "parameter management",
+      "file I/O"
+    ]
+  },
+  {
+    "id": "gen_24",
+    "type": "Syllabus QA",
+    "question": "What topics are covered in the Django view layer documentation?",
+    "expected_sources": [
+      "RAG sample 3.pdf"
+    ],
+    "reference_keywords": [
+      "view layer",
+      "views",
+      "request",
+      "response"
+    ]
+  },
+  {
+    "id": "gen_25",
+    "type": "Factual QA",
+    "question": "What is the formula for the speed of a wave on a stretched string?",
+    "expected_sources": [
+      "RAG sample 1.pdf"
+    ],
+    "reference_keywords": [
+      "wave speed",
+      "stretched string",
+      "tension"
+    ]
+  },
+  {
+    "id": "gen_26",
+    "type": "Factual QA",
+    "question": "What is the purpose of positional encoding in the Transformer model?",
+    "expected_sources": [
+      "RAG sample 2.pdf"
+    ],
+    "reference_keywords": [
+      "positional encoding",
+      "Transformer",
+      "sequence"
+    ]
+  },
+  {
+    "id": "gen_27",
+    "type": "Factual QA",
+    "question": "How do you specify a database index for a field in a Django model?",
+    "expected_sources": [
+      "RAG sample 3.pdf"
+    ],
+    "reference_keywords": [
+      "db_index",
+      "Meta",
+      "indexes"
+    ]
+  },
+  {
+    "id": "gen_28",
+    "type": "Keyword Lookup",
+    "question": "Define the term 'resonance' in forced oscillations.",
+    "expected_sources": [
+      "RAG sample 1.pdf"
+    ],
+    "reference_keywords": [
+      "resonance",
+      "forced oscillations"
+    ]
+  },
+  {
+    "id": "gen_29",
+    "type": "Keyword Lookup",
+    "question": "What is the definition of 'early stopping' in regularization?",
+    "expected_sources": [
+      "RAG sample 2.pdf"
+    ],
+    "reference_keywords": [
+      "early stopping",
+      "regularization"
+    ]
+  },
+  {
+    "id": "gen_30",
+    "type": "Keyword Lookup",
+    "question": "What is the purpose of the select_related method in QuerySets?",
+    "expected_sources": [
+      "RAG sample 3.pdf"
+    ],
+    "reference_keywords": [
+      "select_related",
+      "QuerySet",
+      "JOIN"
+    ]
   }
 ]

@@ -14,7 +14,7 @@ AcademeRAG-Final is a full-stack Retrieval-Augmented Generation (RAG) platform f
 ## Current Stack
 
 - Backend: Django, Django REST Framework, SimpleJWT, django-ratelimit, django-cors-headers
-- Retrieval: LangChain, Milvus (local file or Zilliz Cloud), PyPDF ingestion
+- Retrieval: LangChain, Milvus (local file or Zilliz Cloud), PyPDF ingestion, BAAI/bge-reranker-v2-m3 reranker
 - LLM/Embeddings: Groq (OpenAI-compatible endpoint) + Ollama fallback, Ollama embeddings
 - Frontend: React + TypeScript + Vite + Radix/shadcn components + Zustand
 - Quality/Security: Vitest, Playwright, coverage gates, Bandit, pip-audit, npm audit, SBOM generation
@@ -139,7 +139,8 @@ python3 setup_milvus.py
 
 - Online retrieval uses Milvus/Zilliz when the cloud endpoint is healthy.
 - Offline retrieval uses the local cached fallback retriever over the PDF corpus.
-- The fallback retriever is BM25-style over cached PDF chunks and is substantially stronger than a simple token-overlap fallback.
+- **Hybrid Retrieval Fusion**: Combines dense (Milvus) and sparse (BM25) search legs using **Min-Max Normalized Weighted Fusion** (configured via `ACADEMERAG_RRF_DENSE_WEIGHT=0.3`), with a single-leg bypass if either leg is empty.
+- **Reranking**: Candidate chunks are re-scored using `BAAI/bge-reranker-v2-m3` on local GPU/CUDA hardware (e.g. RTX 3070) to optimize latency, and filtered using a tuned threshold (`ACADEMERAG_RERANK_CUTOFF=0.2`) to discard out-of-domain noise.
 - Page-aware metadata is preserved for locally parsed PDFs.
 - Neighbor chunk expansion is used to retain continuity for multi-part answers.
 - Syllabus and unit-wise queries use a dedicated extraction path to reduce summarization loss and incomplete answers.
@@ -281,3 +282,4 @@ Per repository cleanup, only these Markdown files are retained:
 - `README.md`
 - `Final_Integration Summary.md`
 - `Architecture_Diagrams.md`
+- `documentation/architecture.md`

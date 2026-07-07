@@ -506,12 +506,15 @@ def _search_milvus_with_config(
     for hit in hits:
         if isinstance(hit, dict):
             entity = hit.get("entity") or {}
+            score = hit.get("distance", 0.0)
         else:
             entity = getattr(hit, "entity", {}) or {}
+            score = getattr(hit, "distance", 0.0)
         text = str(entity.get("text") or "")
         if not text:
             continue
         metadata = {key: value for key, value in entity.items() if key != "text"}
+        metadata["score"] = float(score)
         docs.append(Document(page_content=text, metadata=metadata))
     return _filter_docs_by_sources(docs, target_sources or set())
 

@@ -28,7 +28,7 @@ def _get_cross_encoder():
                     os.environ["HF_HUB_OFFLINE"] = "1"
                     from sentence_transformers import CrossEncoder
                     _cross_encoder_model = CrossEncoder(
-                        "cross-encoder/ms-marco-MiniLM-L-6-v2", local_files_only=True
+                        "BAAI/bge-reranker-v2-m3", local_files_only=True
                     )
                 except Exception as exc:
                     logger.warning(
@@ -38,7 +38,7 @@ def _get_cross_encoder():
                     try:
                         os.environ.pop("HF_HUB_OFFLINE", None)
                         from sentence_transformers import CrossEncoder
-                        _cross_encoder_model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+                        _cross_encoder_model = CrossEncoder("BAAI/bge-reranker-v2-m3")
                     except ImportError:
                         logger.error(
                             "sentence_transformers is not installed. "
@@ -74,10 +74,15 @@ def _cross_encoder_rerank(
     scored_docs.sort(key=lambda x: x[1], reverse=True)
 
     reranked_docs = []
-    for doc, score in scored_docs[:k]:
+    cutoff = float(os.environ.get("ACADEMERAG_RERANK_CUTOFF", "0.3"))
+    for doc, score in scored_docs:
+        if float(score) < cutoff:
+            continue
         if doc.metadata is None:
             doc.metadata = {}
         doc.metadata["rerank_score"] = float(score)
         reranked_docs.append(doc)
+        if len(reranked_docs) >= k:
+            break
 
     return reranked_docs
