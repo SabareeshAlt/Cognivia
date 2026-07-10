@@ -81,5 +81,34 @@ describe("ChatPage markdown cleanup", () => {
     expect(html).toContain("<p><strong>Heading 6</strong></p>");
     expect(html).not.toContain("#");
   });
+
+  it("correctly parses and renders markdown tables as responsive HTML tables", () => {
+    const raw = [
+      "Here is a table:",
+      "| Item | Details | Source |",
+      "|------|---------|--------|",
+      "| `class Form` | Base class for creating form objects. | RAG sample |",
+      "| Unbound form | Example unbound form. | |",
+      "And text after the table."
+    ].join("\n");
+
+    const html = markdownToSafeHtml(raw, false);
+
+    expect(html).toContain("Here is a table:");
+    expect(html).toContain("<div class=\"overflow-x-auto my-4 rounded-lg border border-border\">");
+    expect(html).toContain("<table class=\"min-w-full divide-y divide-border text-sm\">");
+    expect(html).toContain("<thead class=\"bg-muted/50\"><tr>");
+    expect(html).toContain("<th class=\"px-4 py-3 text-left font-semibold text-foreground border-b border-border\">Item</th>");
+    expect(html).toContain("<th class=\"px-4 py-3 text-left font-semibold text-foreground border-b border-border\">Details</th>");
+    expect(html).toContain("<th class=\"px-4 py-3 text-left font-semibold text-foreground border-b border-border\">Source</th>");
+    expect(html).toContain("<tbody class=\"divide-y divide-border bg-card\"><tr>");
+    expect(html).toContain("<td class=\"px-4 py-3 text-foreground whitespace-normal break-words\"><code>class Form</code></td>");
+    expect(html).toContain("<td class=\"px-4 py-3 text-foreground whitespace-normal break-words\">Base class for creating form objects.</td>");
+    expect(html).toContain("<td class=\"px-4 py-3 text-foreground whitespace-normal break-words\">RAG sample</td>");
+    expect(html).toContain("<td class=\"px-4 py-3 text-foreground whitespace-normal break-words\">Unbound form</td>");
+    expect(html).toContain("And text after the table.");
+    expect(html).not.toContain("|---|---|");
+    expect(html).not.toContain("Item | Details");
+  });
 });
 

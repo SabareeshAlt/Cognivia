@@ -142,6 +142,62 @@ function normalizeAssistantParagraph(input: string): string {
 }
 
 
+function isSeparatorRow(line: string): boolean {
+  return /^\s*\|?(?:\s*:?-+:?\s*\|?)+\s*$/.test(line) && /[-:]/.test(line);
+}
+
+function parseTableRow(line: string): string[] {
+  const trimmed = line.trim();
+  let parts = trimmed.split("|");
+  if (trimmed.startsWith("|")) {
+    parts.shift();
+  }
+  if (trimmed.endsWith("|") && parts.length > 0) {
+    parts.pop();
+  }
+  return parts.map((p) => p.trim());
+}
+
+function renderTable(tableLines: string[], cleanAcademicNoise: boolean): string {
+  if (tableLines.length < 2) {
+    return tableLines
+      .map((line) => `<p>${renderInlineMarkdown(line, cleanAcademicNoise)}</p>`)
+      .join("");
+  }
+
+  const headerLine = tableLines[0];
+  const separatorLine = tableLines[1];
+
+  if (!isSeparatorRow(separatorLine)) {
+    return tableLines
+      .map((line) => `<p>${renderInlineMarkdown(line, cleanAcademicNoise)}</p>`)
+      .join("");
+  }
+
+  const headers = parseTableRow(headerLine);
+
+  let html = `<div class="overflow-x-auto my-4 rounded-lg border border-border"><table class="min-w-full divide-y divide-border text-sm">`;
+  html += `<thead class="bg-muted/50"><tr>`;
+  for (const h of headers) {
+    html += `<th class="px-4 py-3 text-left font-semibold text-foreground border-b border-border">${renderInlineMarkdown(h, cleanAcademicNoise)}</th>`;
+  }
+  html += `</tr></thead>`;
+
+  html += `<tbody class="divide-y divide-border bg-card">`;
+  for (let i = 2; i < tableLines.length; i++) {
+    const cells = parseTableRow(tableLines[i]);
+    html += `<tr>`;
+    for (let j = 0; j < headers.length; j++) {
+      const cellValue = cells[j] || "";
+      html += `<td class="px-4 py-3 text-foreground whitespace-normal break-words">${renderInlineMarkdown(cellValue, cleanAcademicNoise)}</td>`;
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody></table></div>`;
+
+  return html;
+}
+
 export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): string {
   const normalizedInput = cleanAcademicNoise ? cleanAssistantDisplayText(input) : input;
   const lines = normalizedInput.split("\n");
@@ -149,6 +205,7 @@ export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): s
   let inCodeBlock = false;
   let codeBuffer: string[] = [];
   let listMode: "ul" | "ol" | null = null;
+  let tableBuffer: string[] = [];
 
   const closeListIfOpen = () => {
     if (listMode === "ul") chunks.push("</ul>");
@@ -156,9 +213,17 @@ export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): s
     listMode = null;
   };
 
+  const flushTable = () => {
+    if (tableBuffer.length > 0) {
+      chunks.push(renderTable(tableBuffer, cleanAcademicNoise));
+      tableBuffer = [];
+    }
+  };
+
   for (const rawLine of lines) {
     const line = rawLine.trimEnd();
     if (line.startsWith("```")) {
+      flushTable();
       closeListIfOpen();
       if (inCodeBlock) {
         chunks.push(`<pre><code>${escapeHtml(codeBuffer.join("\n"))}</code></pre>`);
@@ -174,6 +239,13 @@ export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): s
       codeBuffer.push(rawLine);
       continue;
     }
+
+    if (line.trim().startsWith("|")) {
+      tableBuffer.push(line);
+      continue;
+    }
+
+    flushTable();
 
     if (!line.trim()) {
       closeListIfOpen();
@@ -230,13 +302,37 @@ export function markdownToSafeHtml(input: string, cleanAcademicNoise = false): s
     }
   }
 
+  flushTable();
+
   if (inCodeBlock && codeBuffer.length) {
     chunks.push(`<pre><code>${escapeHtml(codeBuffer.join("\n"))}</code></pre>`);
   }
   closeListIfOpen();
 
   return DOMPurify.sanitize(chunks.join(""), {
-    ALLOWED_TAGS: ["h1", "h2", "h3", "p", "ul", "ol", "li", "code", "pre", "strong", "em", "a", "br", "span"],
+    ALLOWED_TAGS: [
+      "h1",
+      "h2",
+      "h3",
+      "p",
+      "ul",
+      "ol",
+      "li",
+      "code",
+      "pre",
+      "strong",
+      "em",
+      "a",
+      "br",
+      "span",
+      "div",
+      "table",
+      "thead",
+      "tbody",
+      "tr",
+      "th",
+      "td",
+    ],
     ALLOWED_ATTR: ["href", "target", "rel", "class", "title"],
   });
 }
