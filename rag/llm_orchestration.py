@@ -43,7 +43,7 @@ from database import (
     _env_str,
 )
 
-load_dotenv()
+load_dotenv(override=True)
 logger = logging.getLogger(__name__)
 
 # ─── Configuration ─────────────────────────────────────────────────────────────

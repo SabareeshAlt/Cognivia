@@ -23,12 +23,18 @@ except Exception:
 
 def print_check(label):
     try:
-        print(f"✓ {label}")
+        print(f"✓ {label}", flush=True)
     except UnicodeEncodeError:
-        print(f"[OK] {label}")
+        print(f"[OK] {label}", flush=True)
 
 
 ROOT = Path(__file__).resolve().parent
+try:
+    from dotenv import load_dotenv
+    load_dotenv(ROOT / ".env", override=True)
+except ImportError:
+    pass
+
 FRONTEND_DIR_CANDIDATES = (ROOT / 'Frontend', ROOT)
 VENV_PYTHON_CANDIDATES = (
     ROOT / '.venv' / 'Scripts' / 'python.exe',
@@ -40,7 +46,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Run AcademeRAG services together.')
     parser.add_argument('--backend-host', default='127.0.0.1')
     parser.add_argument('--backend-port', type=int, default=8000)
-    parser.add_argument('--frontend-host', default='127.0.0.1')
+    parser.add_argument('--frontend-host', default='localhost')
     parser.add_argument('--frontend-port', type=int, default=5173)
     parser.add_argument('--backend-only', action='store_true')
     parser.add_argument('--frontend-only', action='store_true')
@@ -112,7 +118,11 @@ def wait_for_http(url, timeout_s=120):
 
 def resolve_frontend_dir():
     for candidate in FRONTEND_DIR_CANDIDATES:
-        if (candidate / 'package.json').exists() and (candidate / 'vite.config.ts').exists():
+        if (candidate / 'package.json').exists() and (
+            (candidate / 'vite.config.mjs').exists()
+            or (candidate / 'vite.config.ts').exists()
+            or (candidate / 'vite.config.js').exists()
+        ):
             return candidate
     checked = ', '.join(str(path) for path in FRONTEND_DIR_CANDIDATES)
     raise RuntimeError(f'Unable to locate the frontend workspace. Checked: {checked}')
@@ -227,7 +237,7 @@ def start_backend(args, python_bin, port):
     return proc
 
 
-def start_frontend(args, frontend_dir, npm_cmd, port, backend_url=None):
+def start_frontend(args, frontend_dir, npm_cmd, port, backend_url=None, proxy_target=None):
     cmd = npm_cmd + [
         'run',
         'dev',
@@ -241,7 +251,10 @@ def start_frontend(args, frontend_dir, npm_cmd, port, backend_url=None):
     env['FORCE_COLOR'] = env.get('FORCE_COLOR', '1')
     if backend_url:
         env['VITE_API_BASE_URL'] = backend_url
-        print(f'[setup] Frontend API target -> {backend_url}')
+        print(f'[setup] Unified Project URL -> {backend_url}')
+    if proxy_target:
+        env['VITE_PROXY_TARGET'] = proxy_target
+        print(f'[setup] Backend API Worker -> {proxy_target} (Proxied to {backend_url or "frontend"})')
     proc = subprocess.Popen(
         cmd,
         cwd=frontend_dir,
@@ -424,25 +437,29 @@ def main():
             backend_port = resolve_start_port(args.backend_host, args.backend_port, 'Backend')
             processes.append(start_backend(args, python_bin, backend_port))
         if not args.backend_only:
-            if args.frontend_host == args.backend_host and frontend_port == backend_port:
-                frontend_port += 1
-            frontend_port = resolve_start_port(
-                args.frontend_host,
-                frontend_port,
-                'Frontend',
-                strict_permissions=False,
-            )
+            can_bind, bind_error = can_bind_port('127.0.0.1', 5173)
+            if not can_bind:
+                can_bind_lh, _ = can_bind_port('localhost', 5173)
+                if not can_bind_lh:
+                    raise RuntimeError(
+                        f'Frontend port 5173 is unavailable ({bind_error}). '
+                        'This project is strictly configured to use only http://localhost:5173. '
+                        'Please close any process using port 5173 and try again.'
+                    )
+            frontend_port = 5173
             ensure_frontend_dependencies(frontend_dir, npm_cmd)
-            resolved_backend_url = None
+            unified_project_url = f'http://{args.frontend_host}:{frontend_port}'
+            proxy_target = None
             if not args.frontend_only:
-                resolved_backend_url = f'http://{args.backend_host}:{backend_port}'
+                proxy_target = f'http://{args.backend_host}:{backend_port}'
             processes.append(
                 start_frontend(
                     args,
                     frontend_dir,
                     npm_cmd,
                     frontend_port,
-                    backend_url=resolved_backend_url,
+                    backend_url=unified_project_url,
+                    proxy_target=proxy_target,
                 )
             )
     except Exception as exc:
@@ -464,7 +481,11 @@ def main():
             frontend_url = f'http://{args.frontend_host}:{frontend_port}'
             ok = wait_for_http(frontend_url)
             if ok:
-                print_check("Frontend Running")
+                print_check(f"Frontend Running ({frontend_url})")
+            if not args.frontend_only:
+                proxy_live_url = f'{frontend_url}/api/health/live/'
+                if wait_for_http(proxy_live_url, timeout_s=10):
+                    print_check(f"Unified API Gateway Active ({frontend_url}/api/)")
 
     print('\nAcademeRAG started successfully')
 

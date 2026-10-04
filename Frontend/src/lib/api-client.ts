@@ -94,9 +94,11 @@ function candidateApiBaseUrls(): string[] {
     const current = new URL(activeApiBaseUrl);
     if (isLocalHostname(current.hostname)) {
       const protocol = current.protocol;
-      const hostname = current.hostname;
-      for (const port of LOCAL_BACKEND_SCAN_PORTS) {
-        candidates.add(`${protocol}//${hostname}:${port}`);
+      const localHosts = [current.hostname, current.hostname === "127.0.0.1" ? "localhost" : "127.0.0.1"];
+      for (const host of localHosts) {
+        for (const port of LOCAL_BACKEND_SCAN_PORTS) {
+          candidates.add(`${protocol}//${host}:${port}`);
+        }
       }
     }
   } catch {

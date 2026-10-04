@@ -53,17 +53,10 @@ function resolveApiBaseUrl(): string {
       return stripTrailingSlash(runtimeUrl.trim());
     }
 
-    const { protocol, hostname, origin, port } = window.location;
-    if (hostname === "127.0.0.1" || hostname === "localhost") {
-      const currentPort = Number.parseInt(port, 10);
-      if (Number.isNaN(currentPort) || !LOCAL_BACKEND_PORTS.includes(currentPort)) {
-        return `${protocol}//${hostname}:8000`;
-      }
-    }
-    return stripTrailingSlash(origin);
+    return stripTrailingSlash(window.location.origin);
   }
 
-  return "http://127.0.0.1:8000";
+  return "http://localhost:5173";
 }
 
 const apiBaseUrl = resolveApiBaseUrl();

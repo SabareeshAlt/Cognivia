@@ -37,7 +37,13 @@ api/migrations/__pycache__/
 rag_project/__pycache__/
 rag/__pycache__/
 
-# Root-level logs to ignore
-ingest_pdfs_bge_m3.log
+# Cache directories (model weights, PyTorch, Hugging Face)
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs to ignore
+*.log
 
 

@@ -31,6 +31,6 @@ describe("config", () => {
     vi.stubEnv("VITE_FEATURE_DIAGNOSTICS_PANEL", "false");
 
     const { config } = await import("@/lib/config");
-    expect(config.apiBaseUrl).toBe("http://localhost:8000");
+    expect(config.apiBaseUrl).toBe(window.location.origin);
   });
 });

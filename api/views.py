@@ -55,9 +55,8 @@ def _load_rag_modules():
     try:
         milvus_module = importlib.import_module("database")
         llm_module = importlib.import_module("rag.llm_orchestration")
-        if _rag_modules_loaded and settings.DEBUG:
-            milvus_module = importlib.reload(milvus_module)
-            llm_module = importlib.reload(llm_module)
+        # Avoid reloading heavy C-extension/torch modules at runtime
+        # to prevent corrupting PyTorch 2.6's dynamo cache registration
 
         _stream_fn = llm_module.stream_optimized_response
         _response_fn = llm_module.get_optimized_response

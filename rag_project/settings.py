@@ -6,12 +6,49 @@ from datetime import timedelta
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / ".env")
+load_dotenv(BASE_DIR / ".env", override=True)
 
 PROMETHEUS_MULTIPROC_DIR = os.environ.get('PROMETHEUS_MULTIPROC_DIR', str(BASE_DIR / 'prometheus_multiproc_dir'))
 os.environ["PROMETHEUS_MULTIPROC_DIR"] = PROMETHEUS_MULTIPROC_DIR
 if not os.path.exists(PROMETHEUS_MULTIPROC_DIR):
     os.makedirs(PROMETHEUS_MULTIPROC_DIR, exist_ok=True)
+
+WORKSPACE_CACHE_DIR = BASE_DIR / ".cache"
+os.makedirs(WORKSPACE_CACHE_DIR / "inductor", exist_ok=True)
+os.makedirs(WORKSPACE_CACHE_DIR / "torch_ext", exist_ok=True)
+os.makedirs(WORKSPACE_CACHE_DIR / "huggingface", exist_ok=True)
+os.environ["TORCHINDUCTOR_CACHE_DIR"] = str(WORKSPACE_CACHE_DIR / "inductor")
+os.environ["TORCH_EXTENSIONS_DIR"] = str(WORKSPACE_CACHE_DIR / "torch_ext")
+os.environ["HF_HOME"] = str(WORKSPACE_CACHE_DIR / "huggingface")
+
+try:
+    import torch.compiler._cache as _tcc
+    _orig_caf_register = _tcc.CacheArtifactFactory.register
+    @classmethod
+    def _idempotent_register(cls, artifact_cls):
+        try:
+            artifact_type_key = artifact_cls.type()
+            if artifact_type_key in cls._artifact_types:
+                return artifact_cls
+        except Exception:
+            pass
+        return _orig_caf_register.__func__(cls, artifact_cls)
+    _tcc.CacheArtifactFactory.register = _idempotent_register
+except Exception:
+    pass
+
+try:
+    import magic
+    magic.from_file(__file__)
+except Exception:
+    from types import ModuleType
+    import mimetypes
+    _dummy_magic = ModuleType("magic")
+    def _fallback_from_file(filename, mime=False):
+        guessed, _ = mimetypes.guess_type(str(filename))
+        return guessed or ("application/pdf" if str(filename).lower().endswith(".pdf") else "application/octet-stream")
+    _dummy_magic.from_file = _fallback_from_file
+    sys.modules["magic"] = _dummy_magic
 
 
 def env_required(name: str) -> str:
@@ -166,6 +203,11 @@ SIMPLE_JWT = {
 
 CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS")
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS")
+if DEBUG:
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^http://localhost(:\d+)?$",
+        r"^http://127\.0\.0\.1(:\d+)?$",
+    ]
 CORS_ALLOW_CREDENTIALS = True
 if CORS_ALLOW_ALL_ORIGINS and CORS_ALLOW_CREDENTIALS:
     raise RuntimeError("CORS_ALLOW_ALL_ORIGINS=true is not allowed with credentialed requests")
@@ -184,6 +226,15 @@ CORS_ALLOW_HEADERS = [
 ]
 
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
+if DEBUG:
+    for local_origin in [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+    ]:
+        if local_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(local_origin)
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = not DEBUG

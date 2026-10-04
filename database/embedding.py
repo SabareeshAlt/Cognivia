@@ -79,6 +79,11 @@ class NaNSafeOllamaEmbeddings(OllamaEmbeddings):
                         result.append(item_vec)
                     return result
                 
+                err_str = str(e).lower()
+                if "failed to connect" in err_str or "connection refused" in err_str or "actively refused" in err_str:
+                    logger.warning("Ollama is unreachable (%s). Skipping document embedding retries.", e)
+                    raise RuntimeError(f"Ollama is unreachable: {e}") from e
+                
                 logger.warning("Batch embedding attempt %d/%d failed: %s", attempt, max_retries, e)
                 if attempt < max_retries:
                     time.sleep(retry_delay * attempt)
@@ -95,6 +100,11 @@ class NaNSafeOllamaEmbeddings(OllamaEmbeddings):
                 return super().embed_query(text)
             except Exception as e:
                 last_exc = e
+                err_str = str(e).lower()
+                if "failed to connect" in err_str or "connection refused" in err_str or "actively refused" in err_str:
+                    logger.warning("Ollama is unreachable (%s). Skipping query embedding retries.", e)
+                    raise RuntimeError(f"Ollama is unreachable: {e}") from e
+
                 if "NaN" in str(e) or "500" in str(e) or "Internal Server Error" in str(e):
                     logger.warning("Query embedding failed. Applying split-and-average NaN protection.")
                     words = text.split()

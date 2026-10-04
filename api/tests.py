@@ -466,10 +466,17 @@ class MetadataVerificationTests(TestCase):
 
     @patch("database.milvus_client._connect_milvus_client_with_timeout")
     @patch("database.milvus_client._milvus_endpoint_reachable", return_value=False)
-    def test_metadata_check_skips_cloud_when_unreachable(self, mock_reachable, mock_connect):
+    @patch("database.milvus_client._get_cloud_config")
+    def test_metadata_check_skips_cloud_when_unreachable(self, mock_cloud_cfg, mock_reachable, mock_connect):
         """When cloud is unreachable, only local stats are queried."""
         from database.milvus_client import check_and_log_metadata_discrepancies
 
+        mock_cloud_cfg.return_value = {
+            "uri": "https://cloud.example.com",
+            "token": "tok",
+            "collection": "AcademeRAG",
+            "model": "bge-m3:latest",
+        }
         mock_client = mock_connect.return_value
         mock_client.get_collection_stats.return_value = {"row_count": 5600}
 
