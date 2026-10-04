@@ -1,49 +1,133 @@
+# ==============================================================================
+# Cognivia - Git Ignore Rules
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Environment Variables & Secrets (NEVER COMMIT)
+# ------------------------------------------------------------------------------
 .env
 .env.*
+!.env.example
 Frontend/.env
 Frontend/.env.*
+!Frontend/.env.example
+*.pem
+*.key
+*.cert
 
-
-# macOS / editor / Python runtime artifacts
-.DS_Store
-.venv/
+# ------------------------------------------------------------------------------
+# Python & Virtual Environments
+# ------------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# local databases
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing, Linting & Type Checking caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+nosetests.xml
+.tox/
+.nox/
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+
+# ------------------------------------------------------------------------------
+# Django Framework
+# ------------------------------------------------------------------------------
+*.sqlite3
+*.sqlite3-journal
 db.sqlite3
+local_settings.py
+staticfiles/
 
-# frontend generated outputs
+# ------------------------------------------------------------------------------
+# Milvus, Vector Database & RAG Caches
+# ------------------------------------------------------------------------------
+milvus_local.db
+milvus_data/
+volumes/
+.milvus/
+*.pkl
+*.npy
+*.npz
+prometheus_multiproc_dir/
+.cache/
+
+# ------------------------------------------------------------------------------
+# Node.js & Frontend (React / Vite / TypeScript)
+# ------------------------------------------------------------------------------
+node_modules/
 Frontend/node_modules/
 Frontend/dist/
 Frontend/coverage/
 Frontend/playwright-report/
 Frontend/test-results/
+Frontend/blob-report/
+Frontend/.vite/
+.eslintcache
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Milvus / vector store runtime artifacts
-milvus_local.db
-*.sqlite3
-*.pkl
-*.lock
+# ------------------------------------------------------------------------------
+# Operating System & IDE / Editor Files
+# ------------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
 
-# Prometheus metrics runtime
-prometheus_multiproc_dir/
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
 
-# Dev scratchpad
-scratch/
+# Editors & IDEs
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+*.swp
+*.swo
+*~
 
-# Compiled Python migrations bytecode
-api/migrations/__pycache__/
-rag_project/__pycache__/
-rag/__pycache__/
-
-# Cache directories (model weights, PyTorch, Hugging Face)
-.cache/
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Logs to ignore
+# Logs & Temporary Scratches
 *.log
-
-
+scratch/
