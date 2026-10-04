@@ -1,4 +1,4 @@
-# AcademeRAG Category-wise Evaluation Report
+# Cognivia Category-wise Evaluation Report
 
 | Category | Total Cases | Pass Rate | Faithfulness | Answer Relevancy | Context Recall | Context Precision |
 |---|---|---|---|---|---|---|

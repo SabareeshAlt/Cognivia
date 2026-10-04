@@ -285,7 +285,7 @@ def ask_question(request):
 @require_http_methods(["GET"])
 def health_live(request):
     """Liveness probe: Django is up and serving HTTP."""
-    return JsonResponse({"status": "alive", "service": "academerag-api"})
+    return JsonResponse({"status": "alive", "service": "cognivia-api"})
 
 
 @require_http_methods(["GET"])

@@ -1,4 +1,4 @@
-# AcademeRAG-Final
+# Cognivia
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python Version"/>
@@ -12,13 +12,13 @@
   <img src="https://img.shields.io/badge/Ollama-Offline%20LLM-000000?style=for-the-badge&logoColor=white" alt="Ollama"/>
 </p>
 
-AcademeRAG is an enterprise-grade, full-stack Retrieval-Augmented Generation (RAG) platform tailored for academic research, university curricula, and scholarly question answering. It unites a Django REST API backend, an interactive React + TypeScript client with streaming UX, and a resilient dual-mode vector retrieval engine supporting both Cloud Milvus (Zilliz) and local Milvus Lite fallbacks with hybrid BM25 and neural cross-encoder reranking.
+Cognivia is an enterprise-grade, full-stack Retrieval-Augmented Generation (RAG) platform tailored for academic research, university curricula, and scholarly question answering. It unites a Django REST API backend, an interactive React + TypeScript client with streaming UX, and a resilient dual-mode vector retrieval engine supporting both Cloud Milvus (Zilliz) and local Milvus Lite fallbacks with hybrid BM25 and neural cross-encoder reranking.
 
 ---
 
 ## System Architecture
 
-The following diagram illustrates the complete interactive runtime topology of AcademeRAG, tracing requests from the client down to the neural reranker and LLM providers:
+The following diagram illustrates the complete interactive runtime topology of Cognivia, tracing requests from the client down to the neural reranker and LLM providers:
 
 ```mermaid
 flowchart TD
@@ -143,7 +143,7 @@ flowchart LR
 ## Repository Structure
 
 ```text
-AcademeRAG-Final/
+Cognivia/
 ├── main.py                     # Unified local launcher (preflight, migrations, backend, frontend)
 ├── manage.py                   # Django management CLI
 ├── rag_project/                # Django project settings, URLs, WSGI/ASGI configuration
@@ -175,15 +175,15 @@ AcademeRAG-Final/
 Clone the repository and create your environment configuration:
 
 ```bash
-git clone https://github.com/Xeneium/AcademeRAG-Final.git
-cd AcademeRAG-Final
+git clone https://github.com/Xeneium/AcademeRAG-Final.git Cognivia
+cd Cognivia
 cp .env.example .env
 ```
 
 Review `.env` and fill in:
 - `DJANGO_SECRET_KEY`: Set a secure random string.
 - `GROQ_API_KEY`: (Optional) Your Groq API key for cloud LLM acceleration.
-- `ACADEMERAG_MILVUS_URI`: Zilliz Cloud URI or local path (`milvus_local.db`).
+- `COGNIVIA_MILVUS_URI`: Zilliz Cloud URI or local path (`milvus_local.db`).
 
 ### 2. Install Dependencies
 

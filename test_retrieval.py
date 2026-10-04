@@ -1,6 +1,6 @@
 """
 test_retrieval.py
-Validates the AcademeRAG retrieval pipeline.
+Validates the Cognivia retrieval pipeline.
 Tests Dense, BM25, and Hybrid retrieval across the new PDFs.
 """
 import os

@@ -37,8 +37,8 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-academerag}
-      POSTGRES_USER: ${POSTGRES_USER:-academerag}
+      POSTGRES_DB: ${POSTGRES_DB:-cognivia}
+      POSTGRES_USER: ${POSTGRES_USER:-cognivia}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data

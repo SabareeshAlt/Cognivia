@@ -1,7 +1,7 @@
 """
 ingest_pdfs.py
 --------------
-Full ingestion pipeline for AcademeRAG.
+Full ingestion pipeline for Cognivia.
 
 For each PDF in documents/:
   1. Validate (magic bytes + MIME)
@@ -62,14 +62,14 @@ from pymilvus import MilvusClient, CollectionSchema, DataType, FieldSchema
 
 PROJECT_ROOT     = os.path.dirname(os.path.abspath(__file__))
 DOCUMENTS_DIR    = os.path.join(PROJECT_ROOT, "documents")
-ZILLIZ_URI       = os.environ["ACADEMERAG_MILVUS_URI"]
-ZILLIZ_TOKEN     = os.environ["ACADEMERAG_MILVUS_TOKEN"]
-COLLECTION_NAME  = os.environ.get("COLLECTION_NAME", "AcademeRAG")
+ZILLIZ_URI       = os.environ.get("COGNIVIA_MILVUS_URI", os.environ.get("ACADEMERAG_MILVUS_URI", ""))
+ZILLIZ_TOKEN     = os.environ.get("COGNIVIA_MILVUS_TOKEN", os.environ.get("ACADEMERAG_MILVUS_TOKEN", ""))
+COLLECTION_NAME  = os.environ.get("COLLECTION_NAME", "Cognivia")
 EMBEDDING_MODEL  = os.environ.get("EMBEDDING_MODEL", "mxbai-embed-large")
 OLLAMA_BASE_URL  = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 CHUNK_SIZE       = int(os.environ.get("CHUNK_SIZE", 1000))
 CHUNK_OVERLAP    = int(os.environ.get("CHUNK_OVERLAP", 200))
-INGEST_BATCH     = int(os.environ.get("ACADEMERAG_INGEST_BATCH_SIZE", 256))
+INGEST_BATCH     = int(os.environ.get("COGNIVIA_INGEST_BATCH_SIZE", os.environ.get("ACADEMERAG_INGEST_BATCH_SIZE", 256)))
 LOCAL_MILVUS_PATH = os.path.join(PROJECT_ROOT, "milvus_local.db")
 BM25_INDEX_FILE  = os.path.join(PROJECT_ROOT, "bm25_index.pkl")
 
@@ -267,7 +267,7 @@ def _ensure_local_collection(client: MilvusClient, dim: int) -> MilvusClient:
     ]
     schema = CollectionSchema(
         fields=fields,
-        description="AcademeRAG local fallback",
+        description="Cognivia local fallback",
         enable_dynamic_field=True,
     )
     idx_params = MilvusClient.prepare_index_params()
@@ -301,7 +301,7 @@ def _ensure_cloud_collection(client: MilvusClient, dim: int) -> None:
     ]
     schema = CollectionSchema(
         fields=fields,
-        description="AcademeRAG document chunks",
+        description="Cognivia document chunks",
         enable_dynamic_field=True,
     )
     idx_params = MilvusClient.prepare_index_params()
@@ -456,7 +456,7 @@ def _save_bm25(docs: list[Document], signature: tuple) -> None:
 
 def main() -> int:
     logger.info("=" * 60)
-    logger.info("AcademeRAG PDF Ingestion Pipeline")
+    logger.info("Cognivia PDF Ingestion Pipeline")
     logger.info("Embedding model : %s (dim=%d)", EMBEDDING_MODEL, VECTOR_DIM)
     logger.info("Chunk size      : %d / overlap %d", CHUNK_SIZE, CHUNK_OVERLAP)
     logger.info("Zilliz Cloud    : %s", ZILLIZ_URI)

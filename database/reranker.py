@@ -74,7 +74,7 @@ def _cross_encoder_rerank(
     scored_docs.sort(key=lambda x: x[1], reverse=True)
 
     reranked_docs = []
-    cutoff = float(os.environ.get("ACADEMERAG_RERANK_CUTOFF", "0.3"))
+    cutoff = float(os.environ.get("COGNIVIA_RERANK_CUTOFF", os.environ.get("ACADEMERAG_RERANK_CUTOFF", "0.3")))
     for doc, score in scored_docs:
         if float(score) < cutoff:
             continue

@@ -1,8 +1,8 @@
-# AcademeRAG Project Audit & Root Cause Analysis
+# Cognivia Project Audit & Root Cause Analysis
 
 ## 1. Executive Summary
 
-This report presents a comprehensive production-grade audit and Root Cause Analysis (RCA) of the AcademeRAG project. The audit was conducted by inspecting the entire codebase, live configurations, and empirical evaluation logs. 
+This report presents a comprehensive production-grade audit and Root Cause Analysis (RCA) of the Cognivia project. The audit was conducted by inspecting the entire codebase, live configurations, and empirical evaluation logs. 
 
 The primary finding is that the RAG system's **0% evaluation pass rate** is not caused by a failure of the underlying retrieval algorithms, but rather by **architectural mismatches, critical evaluation metric math inflation, and database synchronization discrepancies**. Specifically:
 1. The evaluation metric checks in `eval/rag_eval.py` require both `answer_relevancy > 0` and `hit_rate >= 0.7` to register a "pass". When the model correctly refuses to answer out-of-domain queries or questions lacking evidence with the standard refusal phrase `"Not found in the provided documents."`, the judge rates the response relevancy as `0.0` (since it does not answer the question topic), and keyword hits fail, mathematically guaranteeing a **0% pass rate** for negative queries and valid refusals.
@@ -13,7 +13,7 @@ The primary finding is that the RAG system's **0% evaluation pass rate** is not 
 
 ## 2. Overall Production Readiness Score
 
-Based on enterprise standards for production-grade retrieval systems, large language model orchestration, and evaluation frameworks, the AcademeRAG project is scored as follows:
+Based on enterprise standards for production-grade retrieval systems, large language model orchestration, and evaluation frameworks, the Cognivia project is scored as follows:
 
 $$\textbf{Overall Score: } 42/100 \textbf{ (Fail / Not Production-Ready)}$$
 
@@ -33,8 +33,8 @@ $$\textbf{Overall Score: } 42/100 \textbf{ (Fail / Not Production-Ready)}$$
 3. **Mathematically Inflated Recall@5**: `recall_at_k` is calculated as `hits / len(expected_sources)`. Because multiple chunks from the same expected source file count as multiple hits, Recall routinely exceeds 1.0 (yielding values up to 3.46).
 4. **Mathematically Inflated NDCG@5**: `calculate_ndcg` divides actual DCG by IDCG. IDCG is bounded by the number of unique expected documents, while DCG accumulates multiple chunk hits from the same document. This allows NDCG@5 to exceed 1.0 (empirically yielding values up to 1.72).
 5. **Rate-Limit Failover Exhaustion**: Under rate limits (Groq HTTP 429), the LLM router falls back to local Ollama. The local Ollama server is run on CPU by default or gets terminated during system restarts, inducing latency spikes (>50 seconds per query).
-6. **Hardcoded Virtual Environment Pathing**: Startup and execution scripts reference hardcoded local paths (e.g., `c:\Sabareesh\AcademeRAG - Research\AcademeRAG-Final\.venv`), preventing execution in multi-developer environments or CI/CD systems.
-7. **BGE Reranker Logit Misinterpretation**: The reranker cutoff `ACADEMERAG_RERANK_CUTOFF` defaults to 0.2. Because BAAI/bge-reranker-v2-m3 outputs raw logits (from -10 to +10) rather than probabilities, applying a fixed threshold of 0.2 without sigmoid normalization filters out marginal but valid positive contexts.
+6. **Hardcoded Virtual Environment Pathing**: Startup and execution scripts reference hardcoded local paths, preventing execution in multi-developer environments or CI/CD systems.
+7. **BGE Reranker Logit Misinterpretation**: The reranker cutoff `COGNIVIA_RERANK_CUTOFF` defaults to 0.2. Because BAAI/bge-reranker-v2-m3 outputs raw logits (from -10 to +10) rather than probabilities, applying a fixed threshold of 0.2 without sigmoid normalization filters out marginal but valid positive contexts.
 8. **Inverted Index Serialization Lag**: BM25 index generation is bound to `bm25_index.pkl`. This file is built synchronously on startup or under file locks, introducing a blocking delay on server spin-up.
 9. **Query Tokenizer Phrase Collision**: The custom `_tokenize` function combines alphanumeric regex extraction with hyphenated compound reconstruction. This results in duplicate term weights (e.g. "course objectives" yields "course-objectives", "course", and "objectives"), skewing BM25 term frequency representation.
 10. **Absence of Token-Level Truncation**: When context exceeds limits, `_format_context` truncates text characters using an arbitrary division factor `max_chars // 4` instead of actual tokenizer length, leading to potential context overflow on LLM API boundaries.
@@ -120,7 +120,7 @@ The schema defined in `rebuild_collection.py` contains:
 ### The Cutoff Regression
 The CrossEncoder reranker (`BAAI/bge-reranker-v2-m3`) computes a score for each `[query, doc.page_content]` pair. In `database/reranker.py`:
 ```python
-cutoff = float(os.environ.get("ACADEMERAG_RERANK_CUTOFF", "0.3"))
+cutoff = float(os.environ.get("COGNIVIA_RERANK_CUTOFF", "0.3"))
 for doc, score in scored_docs:
     if float(score) < cutoff:
         continue
@@ -205,7 +205,7 @@ Across the 15-case evaluation benchmark:
 
 ## 12. Configuration Audit
 
-* **Dead Configs**: `ACADEMERAG_MILVUS_DEPLOYMENT` is parsed in `database/config.py` but is overridden by `ACADEMERAG_MILVUS_MODE` or `.env` URL schemes.
+* **Dead Configs**: `COGNIVIA_MILVUS_DEPLOYMENT` is parsed in `database/config.py` but is overridden by `COGNIVIA_MILVUS_MODE` or `.env` URL schemes.
 * **Incorrect Defaults**: `OLLAMA_BASE_URL` in `database/config.py` defaults to `http://ollama:11434`, which is correct for Docker network setups but fails in local-host development where `http://localhost:11434` is required.
 * **Conflicting Configs**: `EMBEDDING_MODEL` in `ingest_pdfs.py` defaults to `"mxbai-embed-large"`, while `database/config.py` defaults to `"bge-m3:latest"`. If the ingestion script is run with default values, it writes 1024-dimension embeddings, but the query pipeline expects BGE-M3, causing runtime dimension exceptions.
 
@@ -214,7 +214,7 @@ Across the 15-case evaluation benchmark:
 ## 13. Security Audit
 
 * **Prompt Injection**: The case-insensitive regex pattern in `_sanitize_context_text` can be bypassed by inserting spaces or escape characters (e.g. `i g n o r e  i n s t r u c t i o n s`).
-* **Secrets in Environment**: The Zilliz token `ACADEMERAG_MILVUS_TOKEN` is saved as plain text in `.env`.
+* **Secrets in Environment**: The Zilliz token `COGNIVIA_MILVUS_TOKEN` is saved as plain text in `.env`.
 * **PII Leakage**: The system does not scan retrieved documents or queries for personally identifiable information (PII) before routing requests to external LLM providers (e.g., Groq).
 
 ---
@@ -241,7 +241,7 @@ Across the 15-case evaluation benchmark:
 
 ## 17. Production Gap Analysis
 
-To meet enterprise standards, the AcademeRAG project lacks:
+To meet enterprise standards, the Cognivia project lacks:
 1. **Active Database Sync Workers**: A background cron job to sync SQLite and Zilliz Cloud indices.
 2. **Context Compression**: A semantic summarizer to condense retrieved chunks before LLM ingestion.
 3. **Citation Validation Layer**: A validator to map LLM citations back to retrieved context page boundaries.
@@ -274,4 +274,4 @@ To meet enterprise standards, the AcademeRAG project lacks:
 
 ## 21. Final Verdict
 
-The AcademeRAG project features a robust hybrid retrieval architecture, but is currently held back by **faulty evaluation metrics and database desynchronization**. The system is not achieving production-quality evaluation because the metrics are mathematically incorrect, and the retriever is querying an incomplete cloud database. Implementing the identified quick wins and high-priority fixes will elevate the system to a production-ready state.
+The Cognivia project features a robust hybrid retrieval architecture, but is currently held back by **faulty evaluation metrics and database desynchronization**. The system is not achieving production-quality evaluation because the metrics are mathematically incorrect, and the retriever is querying an incomplete cloud database. Implementing the identified quick wins and high-priority fixes will elevate the system to a production-ready state.

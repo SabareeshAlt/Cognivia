@@ -23,7 +23,7 @@ from django.urls import include, path
 def root_index(_request):
     return JsonResponse(
         {
-            "service": "AcademeRAG API",
+            "service": "Cognivia API",
             "status": "ok",
             "routes": {
                 "admin": "/admin/",

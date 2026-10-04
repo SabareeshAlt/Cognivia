@@ -33,8 +33,8 @@ class MetricsMiddleware:
         method = request.method
         status = str(response.status_code)
         labels = {"method": method, "path": path, "status": status}
-        inc_counter("academerag_http_requests_total", labels=labels, value=1)
-        observe_histogram("academerag_http_request_duration_seconds", elapsed, labels=labels)
+        inc_counter("cognivia_http_requests_total", labels=labels, value=1)
+        observe_histogram("cognivia_http_request_duration_seconds", elapsed, labels=labels)
         return response
 
 

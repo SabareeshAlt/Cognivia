@@ -631,7 +631,7 @@ const ChatPage = () => {
         style={{ background: "linear-gradient(180deg, hsl(var(--brand-start)) 0%, hsl(var(--brand-end)) 100%)" }}
       >
         <div className="flex-shrink-0 px-8 pb-8 pt-10">
-          <h1 className="text-2xl font-extrabold tracking-wide text-primary-foreground">ACADEME RAG</h1>
+          <h1 className="text-2xl font-extrabold tracking-wide text-primary-foreground">COGNIVIA</h1>
         </div>
 
         <div className="px-6">
@@ -711,7 +711,7 @@ const ChatPage = () => {
           <div className="mx-6 mt-4 flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
             <AlertTriangle size={16} />
             {isInternetOffline
-              ? "Internet appears offline. AcademeRAG requests can still work until you're back online"
+              ? "Internet appears offline. Cognivia requests can still work until you're back online"
               : "Chat is disabled by feature flag kill-switch."}
           </div>
         )}

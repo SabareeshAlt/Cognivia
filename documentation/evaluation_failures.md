@@ -1,4 +1,4 @@
-# AcademeRAG Evaluation Failure Reports
+# Cognivia Evaluation Failure Reports
 
 ## Failure case 1 (ID: factual_1)
 - **Category**: Retrieval Failure

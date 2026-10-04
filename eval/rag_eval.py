@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Advanced RAG Evaluation Harness for AcademeRAG
+Advanced RAG Evaluation Harness for Cognivia
 Provides:
 - Precision@k, Recall@k, MRR, NDCG@5 for Retrieval
 - Keyword Hit Rate & Citation Validation for Generation
@@ -56,8 +56,8 @@ except ImportError:
 
 class LLMEvaluator:
     def __init__(self, provider=None, model=None):
-        self.provider = provider or os.environ.get("ACADEMERAG_EVAL_JUDGE_PROVIDER", "groq")
-        self.model = model or os.environ.get("ACADEMERAG_EVAL_JUDGE_MODEL", "openai/gpt-oss-120b")
+        self.provider = provider or os.environ.get("COGNIVIA_EVAL_JUDGE_PROVIDER", os.environ.get("ACADEMERAG_EVAL_JUDGE_PROVIDER", "groq"))
+        self.model = model or os.environ.get("COGNIVIA_EVAL_JUDGE_MODEL", os.environ.get("ACADEMERAG_EVAL_JUDGE_MODEL", "openai/gpt-oss-120b"))
         self.ollama_endpoint = os.environ.get("OLLAMA_HEALTHCHECK_URL", "http://localhost:11434").replace("/health", "") or "http://localhost:11434"
         if not self.ollama_endpoint.endswith("/api/generate"):
             self.ollama_endpoint = self.ollama_endpoint.rstrip("/") + "/api/generate"
@@ -581,7 +581,7 @@ def main():
     
     # Write Category Report MD
     cat_report_path = doc_dir / "evaluation_category_report.md"
-    cat_md = ["# AcademeRAG Category-wise Evaluation Report\n"]
+    cat_md = ["# Cognivia Category-wise Evaluation Report\n"]
     cat_md.append("| Category | Total Cases | Pass Rate | Faithfulness | Answer Relevancy | Context Recall | Context Precision |")
     cat_md.append("|---|---|---|---|---|---|---|")
     for cat, s in category_summary.items():
@@ -591,7 +591,7 @@ def main():
     # ─── Failure Analysis Reports ──────────────────────────────────────────────
     print("Generating Failure Analysis Report...")
     fail_report_path = doc_dir / "evaluation_failures.md"
-    fail_md = ["# AcademeRAG Evaluation Failure Reports\n"]
+    fail_md = ["# Cognivia Evaluation Failure Reports\n"]
     if not failures:
         fail_md.append("All evaluation cases passed successfully! No failures recorded.")
     else:
@@ -611,7 +611,7 @@ def main():
     ablation_results = run_retrieval_ablation(dataset, args.k)
     
     ablation_report_path = doc_dir / "retrieval_ablation.md"
-    abl_md = ["# AcademeRAG Retrieval Ablation Study\n"]
+    abl_md = ["# Cognivia Retrieval Ablation Study\n"]
     abl_md.append("| Retrieval Configuration | Precision@5 | Recall@5 | MRR | NDCG@5 | Avg Retrieval Latency (ms) | Avg Reranker Latency (ms) | Avg Total Latency (ms) |")
     abl_md.append("|---|---|---|---|---|---|---|---|")
     for config, metrics in ablation_results.items():
@@ -640,7 +640,7 @@ def main():
     largest_generation_weakness = "Faithfulness" if mean_faithfulness < mean_relevancy else "Answer Relevancy"
     
     sum_md = [
-        "# AcademeRAG Evaluation Summary Report\n",
+        "# Cognivia Evaluation Summary Report\n",
         "## Overall Metrics",
         f"- **Total Cases**: {summary['total_cases']}",
         f"- **Overall Pass Rate**: {summary['overall_pass_rate']:.2%}",

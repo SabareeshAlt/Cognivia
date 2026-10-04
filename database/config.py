@@ -1,7 +1,7 @@
 """
 database/config.py
 ------------------
-Central configuration for the AcademeRAG database package.
+Central configuration for the Cognivia database package.
 All environment variables, constants, and project-path helpers live here.
 Every other database/ module imports from this module — never from each other
 for config — to avoid circular imports.
@@ -28,39 +28,59 @@ os.makedirs(DOCUMENTS_DIR, exist_ok=True)
 # Environment helpers
 # ---------------------------------------------------------------------------
 
-def _required_env(name: str) -> str:
+def _required_env(name: str, legacy_name: str | None = None) -> str:
     value = os.getenv(name)
-    if value is None or not value.strip():
-        raise RuntimeError(f"Environment variable '{name}' is required")
-    return value.strip()
+    if value is not None and value.strip():
+        return value.strip()
+    if legacy_name:
+        legacy_val = os.getenv(legacy_name)
+        if legacy_val is not None and legacy_val.strip():
+            return legacy_val.strip()
+    raise RuntimeError(f"Environment variable '{name}' is required")
 
 
-def _env_int(name: str, default: int) -> int:
+def _env_int(name: str, default: int, legacy_name: str | None = None) -> int:
     value = os.getenv(name)
-    if value is None or not value.strip():
-        return default
-    return int(value)
+    if value is not None and value.strip():
+        return int(value.strip())
+    if legacy_name:
+        legacy_val = os.getenv(legacy_name)
+        if legacy_val is not None and legacy_val.strip():
+            return int(legacy_val.strip())
+    return default
 
 
-def _env_float(name: str, default: float) -> float:
+def _env_float(name: str, default: float, legacy_name: str | None = None) -> float:
     value = os.getenv(name)
-    if value is None or not value.strip():
-        return default
-    return float(value)
+    if value is not None and value.strip():
+        return float(value.strip())
+    if legacy_name:
+        legacy_val = os.getenv(legacy_name)
+        if legacy_val is not None and legacy_val.strip():
+            return float(legacy_val.strip())
+    return default
 
 
-def _env_bool(name: str, default: bool = False) -> bool:
+def _env_bool(name: str, default: bool = False, legacy_name: str | None = None) -> bool:
     value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    if value is not None:
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    if legacy_name:
+        legacy_val = os.getenv(legacy_name)
+        if legacy_val is not None:
+            return legacy_val.strip().lower() in {"1", "true", "yes", "on"}
+    return default
 
 
-def _env_str(name: str, default: str = "") -> str:
+def _env_str(name: str, default: str = "", legacy_name: str | None = None) -> str:
     value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip()
+    if value is not None and value.strip():
+        return value.strip()
+    if legacy_name:
+        legacy_val = os.getenv(legacy_name)
+        if legacy_val is not None and legacy_val.strip():
+            return legacy_val.strip()
+    return default
 
 
 def _looks_like_placeholder(value: str) -> bool:
@@ -98,36 +118,36 @@ BM25_B = 0.75
 # Model / Retrieval config (env-driven)
 # ---------------------------------------------------------------------------
 
-COLLECTION_NAME = _env_str("COLLECTION_NAME", "academerag")
+COLLECTION_NAME = _env_str("COLLECTION_NAME", "cognivia")
 EMBEDDING_MODEL = _env_str("EMBEDDING_MODEL", "bge-m3:latest")
-LLM_MODEL = _env_str("ACADEMERAG_LLM_MODEL", "gemma4:latest")
+LLM_MODEL = _env_str("COGNIVIA_LLM_MODEL", default="gemma4:latest", legacy_name="ACADEMERAG_LLM_MODEL")
 OLLAMA_BASE_URL = _env_str("OLLAMA_BASE_URL", "http://ollama:11434")
-LLM_TEMPERATURE = _env_float("ACADEMERAG_LLM_TEMPERATURE", 0.1)
+LLM_TEMPERATURE = _env_float("COGNIVIA_LLM_TEMPERATURE", default=0.1, legacy_name="ACADEMERAG_LLM_TEMPERATURE")
 LLM_PROVIDER = "ollama"
 
-TOP_K = _env_int("ACADEMERAG_TOP_K", 3)
-DYNAMIC_TOP_K_MIN = _env_int("ACADEMERAG_TOP_K_MIN", 2)
-DYNAMIC_TOP_K_MAX = _env_int("ACADEMERAG_TOP_K_MAX", 6)
-RELEVANCE_SCORE_THRESHOLD = _env_float("ACADEMERAG_SCORE_THRESHOLD", 0.35)
+TOP_K = _env_int("COGNIVIA_TOP_K", default=3, legacy_name="ACADEMERAG_TOP_K")
+DYNAMIC_TOP_K_MIN = _env_int("COGNIVIA_TOP_K_MIN", default=2, legacy_name="ACADEMERAG_TOP_K_MIN")
+DYNAMIC_TOP_K_MAX = _env_int("COGNIVIA_TOP_K_MAX", default=6, legacy_name="ACADEMERAG_TOP_K_MAX")
+RELEVANCE_SCORE_THRESHOLD = _env_float("COGNIVIA_SCORE_THRESHOLD", default=0.35, legacy_name="ACADEMERAG_SCORE_THRESHOLD")
 
 CHUNK_SIZE = _env_int("CHUNK_SIZE", 1000)
 CHUNK_OVERLAP = _env_int("CHUNK_OVERLAP", 200)
 
-MILVUS_TIMEOUT_SECONDS = _env_float("ACADEMERAG_MILVUS_TIMEOUT_SECONDS", 15.0)
-MILVUS_INIT_TIMEOUT_SECONDS = _env_float("ACADEMERAG_MILVUS_INIT_TIMEOUT_SECONDS", 10.0)
-MILVUS_HEALTHCHECK_TIMEOUT_SECONDS = _env_float("ACADEMERAG_MILVUS_HEALTHCHECK_TIMEOUT_SECONDS", 1.5)
-MILVUS_CIRCUIT_BREAKER_SECONDS = _env_float("ACADEMERAG_MILVUS_CIRCUIT_BREAKER_SECONDS", 60.0)
+MILVUS_TIMEOUT_SECONDS = _env_float("COGNIVIA_MILVUS_TIMEOUT_SECONDS", default=15.0, legacy_name="ACADEMERAG_MILVUS_TIMEOUT_SECONDS")
+MILVUS_INIT_TIMEOUT_SECONDS = _env_float("COGNIVIA_MILVUS_INIT_TIMEOUT_SECONDS", default=10.0, legacy_name="ACADEMERAG_MILVUS_INIT_TIMEOUT_SECONDS")
+MILVUS_HEALTHCHECK_TIMEOUT_SECONDS = _env_float("COGNIVIA_MILVUS_HEALTHCHECK_TIMEOUT_SECONDS", default=1.5, legacy_name="ACADEMERAG_MILVUS_HEALTHCHECK_TIMEOUT_SECONDS")
+MILVUS_CIRCUIT_BREAKER_SECONDS = _env_float("COGNIVIA_MILVUS_CIRCUIT_BREAKER_SECONDS", default=60.0, legacy_name="ACADEMERAG_MILVUS_CIRCUIT_BREAKER_SECONDS")
 
-INGEST_BATCH_SIZE = _env_int("ACADEMERAG_INGEST_BATCH_SIZE", 16)
-INGEST_MAX_SECONDS = _env_float("ACADEMERAG_INGEST_MAX_SECONDS", 1800.0)
+INGEST_BATCH_SIZE = _env_int("COGNIVIA_INGEST_BATCH_SIZE", default=16, legacy_name="ACADEMERAG_INGEST_BATCH_SIZE")
+INGEST_MAX_SECONDS = _env_float("COGNIVIA_INGEST_MAX_SECONDS", default=1800.0, legacy_name="ACADEMERAG_INGEST_MAX_SECONDS")
 
 # ---------------------------------------------------------------------------
 # Milvus connection config factories
 # ---------------------------------------------------------------------------
 
 def _get_milvus_config() -> dict:
-    milvus_uri = _env_str("ACADEMERAG_MILVUS_URI", "http://milvus:19530")
-    milvus_token = _env_str("ACADEMERAG_MILVUS_TOKEN", "")
+    milvus_uri = _env_str("COGNIVIA_MILVUS_URI", default="http://milvus:19530", legacy_name="ACADEMERAG_MILVUS_URI")
+    milvus_token = _env_str("COGNIVIA_MILVUS_TOKEN", default="", legacy_name="ACADEMERAG_MILVUS_TOKEN")
     import logging
     logging.getLogger(__name__).info(
         "Using Milvus vector store at %s", milvus_uri
@@ -141,12 +161,12 @@ def _get_milvus_config() -> dict:
 
 
 def _get_deployment_mode() -> str:
-    mode = os.getenv("ACADEMERAG_MILVUS_DEPLOYMENT")
+    mode = os.getenv("COGNIVIA_MILVUS_DEPLOYMENT") or os.getenv("ACADEMERAG_MILVUS_DEPLOYMENT")
     if mode:
         return mode.strip().lower()
-    if _env_bool("ACADEMERAG_ENABLE_MILVUS_CLOUD", default=False):
+    if _env_bool("COGNIVIA_ENABLE_MILVUS_CLOUD", default=False, legacy_name="ACADEMERAG_ENABLE_MILVUS_CLOUD"):
         return "cloud"
-    uri = os.getenv("ACADEMERAG_MILVUS_URI", "")
+    uri = os.getenv("COGNIVIA_MILVUS_URI") or os.getenv("ACADEMERAG_MILVUS_URI", "")
     if uri.startswith(("http://", "https://", "tcp://")):
         return "cloud"
     return "local"
@@ -242,4 +262,4 @@ def _validate_milvus_connection(cfg: dict) -> bool:
 
 def _get_active_milvus_mode() -> str:
     """Return the active Milvus mode string: AUTO | CLOUD | LOCAL."""
-    return os.getenv("ACADEMERAG_MILVUS_MODE", "AUTO").strip().upper()
+    return (os.getenv("COGNIVIA_MILVUS_MODE") or os.getenv("ACADEMERAG_MILVUS_MODE", "AUTO")).strip().upper()

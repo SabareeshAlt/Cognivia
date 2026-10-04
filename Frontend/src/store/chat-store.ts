@@ -36,7 +36,7 @@ interface ChatState {
 const introMessage: ChatMessage = {
   id: "intro",
   role: "assistant",
-  content: "AcademeRAG Ready. Ask me about your uploaded documents!",
+  content: "Cognivia Ready. Ask me about your uploaded documents!",
 };
 
 export const useChatStore = create<ChatState>()(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unified local launcher for AcademeRAG backend + frontend."""
+"""Unified local launcher for Cognivia backend + frontend."""
 
 import argparse
 import errno
@@ -43,7 +43,7 @@ VENV_PYTHON_CANDIDATES = (
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Run AcademeRAG services together.')
+    parser = argparse.ArgumentParser(description='Run Cognivia services together.')
     parser.add_argument('--backend-host', default='127.0.0.1')
     parser.add_argument('--backend-port', type=int, default=8000)
     parser.add_argument('--frontend-host', default='localhost')
@@ -281,7 +281,7 @@ def shutdown_processes(processes):
 
 
 def run_startup_checks(python_bin):
-    print("AcademeRAG Booting...")
+    print("Cognivia Booting...")
     script = """
 import os
 import sys
@@ -309,20 +309,24 @@ try:
 except ImportError:
     pass
 
-required_vars = ["DJANGO_SECRET_KEY", "ACADEMERAG_MILVUS_URI", "COLLECTION_NAME", "EMBEDDING_MODEL"]
+required_vars = ["DJANGO_SECRET_KEY", "COLLECTION_NAME", "EMBEDDING_MODEL"]
 for var in required_vars:
     val = os.environ.get(var)
     if not val or val.startswith("YOUR_") or "placeholder" in val.lower():
         print(f"ERROR: Environment configuration error: variable {var} is missing or has a placeholder value.", file=sys.stderr)
         sys.exit(1)
+milvus_uri = os.environ.get("COGNIVIA_MILVUS_URI") or os.environ.get("ACADEMERAG_MILVUS_URI")
+if not milvus_uri or milvus_uri.startswith("YOUR_") or "placeholder" in milvus_uri.lower():
+    print("ERROR: Environment configuration error: COGNIVIA_MILVUS_URI (or ACADEMERAG_MILVUS_URI) is missing or has a placeholder value.", file=sys.stderr)
+    sys.exit(1)
 print_check("Environment Loaded")
 
 # 2. Milvus Connectivity (dual-mode: cloud primary, local fallback)
 cloud_ok = False
 local_ok = False
 try:
-    uri = os.environ.get("ACADEMERAG_MILVUS_URI", "")
-    token = os.environ.get("ACADEMERAG_MILVUS_TOKEN", "")
+    uri = os.environ.get("COGNIVIA_MILVUS_URI") or os.environ.get("ACADEMERAG_MILVUS_URI", "")
+    token = os.environ.get("COGNIVIA_MILVUS_TOKEN") or os.environ.get("ACADEMERAG_MILVUS_TOKEN", "")
     # Attempt cloud connection if URI is a network endpoint
     if uri.startswith("http://") or uri.startswith("https://") or uri.startswith("tcp://"):
         import socket
@@ -377,7 +381,7 @@ if not bm25_pkl.exists():
 print_check("BM25 Ready")
 
 # 4 & 5 & 6. Embeddings Loaded, Retriever Ready, Knowledge Base Loaded
-llm_model = os.environ.get("ACADEMERAG_LLM_MODEL", "llama3.2")
+llm_model = os.environ.get("COGNIVIA_LLM_MODEL") or os.environ.get("ACADEMERAG_LLM_MODEL", "llama3.2")
 if "llama" in llm_model or "gemma" in llm_model:
     ollama_url = os.environ.get("OLLAMA_HEALTHCHECK_URL", "http://localhost:11434")
     try:
@@ -487,7 +491,7 @@ def main():
                 if wait_for_http(proxy_live_url, timeout_s=10):
                     print_check(f"Unified API Gateway Active ({frontend_url}/api/)")
 
-    print('\nAcademeRAG started successfully')
+    print('\nCognivia started successfully')
 
     try:
         while True:

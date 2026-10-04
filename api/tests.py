@@ -143,7 +143,7 @@ class HealthEndpointTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["status"], "alive")
-        self.assertEqual(payload["service"], "academerag-api")
+        self.assertEqual(payload["service"], "cognivia-api")
         self.assertNotIn("audit", payload)
         self.assertNotIn("audit_error", payload)
 
@@ -152,7 +152,7 @@ class HealthEndpointTests(TestCase):
         response = self.client.get(reverse("metrics"), HTTP_AUTHORIZATION=f"Bearer {self.token}")
         self.assertEqual(response.status_code, 200)
         body = response.content.decode("utf-8")
-        self.assertIn("academerag_http_requests_total", body)
+        self.assertIn("cognivia_http_requests_total", body)
 
     @patch("api.views._load_rag_modules")
     @patch("api.views._vector_store_fn", autospec=False)
@@ -474,7 +474,7 @@ class MetadataVerificationTests(TestCase):
         mock_cloud_cfg.return_value = {
             "uri": "https://cloud.example.com",
             "token": "tok",
-            "collection": "AcademeRAG",
+            "collection": "Cognivia",
             "model": "bge-m3:latest",
         }
         mock_client = mock_connect.return_value
@@ -498,7 +498,7 @@ class MetadataVerificationTests(TestCase):
         mock_cloud_cfg.return_value = {
             "uri": "https://cloud.example.com",
             "token": "tok",
-            "collection": "AcademeRAG",
+            "collection": "Cognivia",
             "model": "bge-m3:latest",
         }
         mock_client = mock_connect.return_value

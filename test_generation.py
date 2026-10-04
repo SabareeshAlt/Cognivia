@@ -1,6 +1,6 @@
 """
 test_generation.py
-Validates the AcademeRAG Answer Generation pipeline using gemma4:latest.
+Validates the Cognivia Answer Generation pipeline using gemma4:latest.
 """
 import os
 import sys
@@ -42,7 +42,7 @@ def run_generation_test():
     logger.info("Formatted context length: %d chars", len(context_text))
 
     # 3. Setup LLM (gemma4:latest)
-    llm_model = os.environ.get("ACADEMERAG_LLM_MODEL", "gemma4:latest")
+    llm_model = os.environ.get("COGNIVIA_LLM_MODEL", os.environ.get("ACADEMERAG_LLM_MODEL", "gemma4:latest"))
     ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
     logger.info("Initializing LLM: %s at %s", llm_model, ollama_url)
     

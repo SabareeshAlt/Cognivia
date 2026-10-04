@@ -1,6 +1,6 @@
 """
 rebuild_collection.py
-Recreates the AcademeRAG collection on Zilliz Cloud with the correct schema:
+Recreates the Cognivia collection on Zilliz Cloud with the correct schema:
   - vector dim=1024 (bge-m3:latest)
   - COSINE metric
   - AUTOINDEX
@@ -19,9 +19,9 @@ load_dotenv()
 
 from pymilvus import MilvusClient, CollectionSchema, DataType, FieldSchema
 
-ZILLIZ_URI = os.environ["ACADEMERAG_MILVUS_URI"]
-ZILLIZ_TOKEN = os.environ["ACADEMERAG_MILVUS_TOKEN"]
-COLLECTION_NAME = os.environ.get("COLLECTION_NAME", "AcademeRAG")
+ZILLIZ_URI = os.environ.get("COGNIVIA_MILVUS_URI", os.environ.get("ACADEMERAG_MILVUS_URI", ""))
+ZILLIZ_TOKEN = os.environ.get("COGNIVIA_MILVUS_TOKEN", os.environ.get("ACADEMERAG_MILVUS_TOKEN", ""))
+COLLECTION_NAME = os.environ.get("COLLECTION_NAME", "Cognivia")
 VECTOR_DIM = 1024
 
 def rebuild(uri, token, collection_name, dim):
@@ -49,7 +49,7 @@ def rebuild(uri, token, collection_name, dim):
     ]
     schema = CollectionSchema(
         fields=fields,
-        description="AcademeRAG document chunks",
+        description="Cognivia document chunks",
         enable_dynamic_field=True,
     )
 

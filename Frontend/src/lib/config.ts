@@ -48,7 +48,11 @@ function resolveApiBaseUrl(): string {
   }
 
   if (typeof window !== "undefined") {
-    const runtimeUrl = (window as Window & { __ACADEMERAG_API_BASE_URL__?: unknown }).__ACADEMERAG_API_BASE_URL__;
+    const customWindow = window as Window & {
+      __COGNIVIA_API_BASE_URL__?: unknown;
+      __ACADEMERAG_API_BASE_URL__?: unknown;
+    };
+    const runtimeUrl = customWindow.__COGNIVIA_API_BASE_URL__ ?? customWindow.__ACADEMERAG_API_BASE_URL__;
     if (typeof runtimeUrl === "string" && runtimeUrl.trim()) {
       return stripTrailingSlash(runtimeUrl.trim());
     }

@@ -760,7 +760,7 @@ Based on the aggregated results, the system demonstrates high retrieval precisio
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AcademeRAG Multi-Agent Evaluation & Validation Runner")
+    parser = argparse.ArgumentParser(description="Cognivia Multi-Agent Evaluation & Validation Runner")
     parser.add_argument(
         "--mode", 
         required=True, 

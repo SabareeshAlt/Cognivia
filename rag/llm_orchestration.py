@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "").strip()
 GROQ_MODEL: str = os.getenv("GROQ_LLM_MODEL", "openai/gpt-oss-120b")
-FAST_TIER_MODEL: str = os.getenv("ACADEMERAG_GROQ_FAST_MODEL", "openai/gpt-oss-20b")
+FAST_TIER_MODEL: str = os.getenv("COGNIVIA_GROQ_FAST_MODEL", os.getenv("ACADEMERAG_GROQ_FAST_MODEL", "openai/gpt-oss-20b"))
 # Offline model — defaults to the configured Ollama model (usually llama3.1:latest).
 # Set OLLAMA_OFFLINE_MODEL=gemma4:latest in .env on the machine where gemma4:latest is pulled.
 OLLAMA_OFFLINE_MODEL: str = os.getenv("OLLAMA_OFFLINE_MODEL", LLM_MODEL)

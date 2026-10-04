@@ -1,7 +1,7 @@
 """
 database/__init__.py
 --------------------
-Public API surface for the AcademeRAG database package.
+Public API surface for the Cognivia database package.
 
 All symbols that external modules (rag/llm_orchestration.py, api/views.py,
 create_milvus_collection.py, setup_milvus.py) imported from the old Milvus.py

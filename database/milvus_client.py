@@ -420,7 +420,7 @@ def ensure_collection_schema(cfg: dict, embeddings, recreate: bool = False) -> b
     ]
     schema = CollectionSchema(
         fields=fields,
-        description="AcademeRAG document chunks",
+        description="Cognivia document chunks",
         enable_dynamic_field=True,
     )
     index_params = MilvusClient.prepare_index_params()

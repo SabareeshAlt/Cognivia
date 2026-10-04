@@ -1,4 +1,4 @@
-# AcademeRAG Retrieval Ablation Study
+# Cognivia Retrieval Ablation Study
 
 | Retrieval Configuration | Precision@5 | Recall@5 | MRR | NDCG@5 | Avg Retrieval Latency (ms) | Avg Reranker Latency (ms) | Avg Total Latency (ms) |
 |---|---|---|---|---|---|---|---|

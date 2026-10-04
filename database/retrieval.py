@@ -109,8 +109,8 @@ def _rrf_fuse(
     else:
         norm_sparse = [1.0] * len(sparse_scores)
 
-    # w = ACADEMERAG_RRF_DENSE_WEIGHT (default = 0.6)
-    w = float(os.environ.get("ACADEMERAG_RRF_DENSE_WEIGHT", "0.6"))
+    # w = COGNIVIA_RRF_DENSE_WEIGHT (default = 0.6)
+    w = float(os.environ.get("COGNIVIA_RRF_DENSE_WEIGHT", os.environ.get("ACADEMERAG_RRF_DENSE_WEIGHT", "0.6")))
 
     def doc_key(doc: Document) -> tuple:
         metadata = doc.metadata or {}

@@ -431,7 +431,7 @@ def initialize_vector_store(
     embeddings = get_embeddings()
     file_metadata = _collect_pdf_metadata()
     tracked_hashes = _load_tracking_map()
-    auto_sync = _env_bool("ACADEMERAG_AUTO_SYNC_INDEX", default=True)
+    auto_sync = _env_bool("COGNIVIA_AUTO_SYNC_INDEX", default=True, legacy_name="ACADEMERAG_AUTO_SYNC_INDEX")
     should_sync, reason = compute_sync_decision(file_metadata, tracked_hashes, force_reindex)
     should_sync = should_sync and auto_sync
 

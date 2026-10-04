@@ -1,6 +1,6 @@
-# AcademeRAG Core Architecture Documentation
+# Cognivia Core Architecture Documentation
 
-This document describes the core architecture of the **AcademeRAG** platform, a high-performance, hybrid Retrieval-Augmented Generation (RAG) platform designed for academic question-answering.
+This document describes the core architecture of the **Cognivia** platform, a high-performance, hybrid Retrieval-Augmented Generation (RAG) platform designed for academic question-answering.
 
 ---
 
@@ -81,14 +81,14 @@ To provide robust and contextually complete academic answers, the retrieval pipe
 ### Min-Max Normalized Weighted Fusion
 The results from the dense and sparse legs are merged using Min-Max Normalized Weighted Fusion:
 \[ Score(d) = w \cdot Norm(Dense\_Score(d)) + (1 - w) \cdot Norm(Sparse\_Score(d)) \]
-where the dense weight $w$ is defined by `ACADEMERAG_RRF_DENSE_WEIGHT` (empirically tuned to `0.3` via grid-search on the golden set).
+where the dense weight $w$ is defined by `COGNIVIA_RRF_DENSE_WEIGHT` (empirically tuned to `0.3` via grid-search on the golden set).
 - **Min-Max Normalization**: Dense and sparse scores are normalized to a `[0, 1]` range to make their scores comparable before weighted summation.
 - **Single-Leg Bypass**: If either retrieval leg is empty, the RRF block bypasses fusion calculations and directly yields the non-empty candidate list to prevent empty-set errors and unnecessary latency.
 
 ### Reranker (CrossEncoder)
 - **Reranker Model**: The candidate chunks are reranked using the **`BAAI/bge-reranker-v2-m3`** model loaded via `sentence_transformers`.
 - **Sequence Classification**: The query and each document chunk are passed together as pairs to determine an exact similarity classification score, refining the ranking.
-- **Configurable Cutoff Filtering**: To prevent noise, hallucinations, and irrelevant answers, any chunk with a reranking score below `ACADEMERAG_RERANK_CUTOFF` (empirically tuned to `0.2` via grid-search) is discarded.
+- **Configurable Cutoff Filtering**: To prevent noise, hallucinations, and irrelevant answers, any chunk with a reranking score below `COGNIVIA_RERANK_CUTOFF` (empirically tuned to `0.2` via grid-search) is discarded.
 - **GPU Acceleration**: The pipeline utilizes local GPU acceleration (via CUDA) when available, reducing reranking latency from ~25-50 seconds (CPU) to ~1.4 seconds (GPU, e.g. NVIDIA RTX 3070).
 - **Offline Safety**: Disables Hugging Face Hub checking after the first load (`HF_HUB_OFFLINE = 1`) to ensure 100% offline retrieval speed.
 

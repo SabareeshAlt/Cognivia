@@ -1,4 +1,4 @@
-# AcademeRAG Evaluation Summary Report
+# Cognivia Evaluation Summary Report
 
 ## Overall Metrics
 - **Total Cases**: 15

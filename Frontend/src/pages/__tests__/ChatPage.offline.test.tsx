@@ -55,7 +55,7 @@ describe("ChatPage offline behavior", () => {
     expect(await screen.findByLabelText("Ask a question")).toBeEnabled();
     expect(screen.getByRole("button", { name: /logout/i })).toBeInTheDocument();
     expect(
-      screen.getByText(/internet appears offline\. academerag requests can still work/i),
+      screen.getByText(/internet appears offline\. cognivia requests can still work/i),
     ).toBeInTheDocument();
   });
 
