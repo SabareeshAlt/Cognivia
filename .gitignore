@@ -14,6 +14,12 @@ Frontend/.env.*
 *.pem
 *.key
 *.cert
+*.crt
+*.pfx
+*.p12
+*.csr
+*.keystore
+secrets/
 
 # ------------------------------------------------------------------------------
 # Python & Virtual Environments
@@ -38,6 +44,9 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
+pip-wheel-metadata/
+pip-log.txt
 
 # Virtual environments
 .venv/
@@ -46,6 +55,7 @@ env/
 ENV/
 env.bak/
 venv.bak/
+env*/
 
 # Testing, Linting & Type Checking caches
 .pytest_cache/
@@ -63,16 +73,17 @@ nosetests.xml
 .pytype/
 
 # ------------------------------------------------------------------------------
-# Django Framework
+# Django Framework & Static/Media Uploads
 # ------------------------------------------------------------------------------
 *.sqlite3
 *.sqlite3-journal
 db.sqlite3
 local_settings.py
 staticfiles/
+media/
 
 # ------------------------------------------------------------------------------
-# Milvus, Vector Database & RAG Caches
+# Milvus, Vector Database, Evaluation & RAG Caches
 # ------------------------------------------------------------------------------
 milvus_local.db
 milvus_data/
@@ -83,6 +94,10 @@ volumes/
 *.npz
 prometheus_multiproc_dir/
 .cache/
+chroma_db/
+chroma_data/
+eval/eval_results/
+eval_results*.json
 
 # ------------------------------------------------------------------------------
 # Node.js & Frontend (React / Vite / TypeScript)
@@ -127,7 +142,16 @@ ehthumbs_vista.db
 *.swp
 *.swo
 *~
+.cursor/
+.windsurf/
+.zed/
 
+# ------------------------------------------------------------------------------
 # Logs & Temporary Scratches
+# ------------------------------------------------------------------------------
 *.log
+logs/
 scratch/
+tmp/
+temp/
+.system_generated/
